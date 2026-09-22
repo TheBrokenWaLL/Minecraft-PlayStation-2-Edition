@@ -26,6 +26,7 @@ void legacyCreateMainMenuButtons(std::vector<GuiButton *> &controlList, GuiButto
     addButton(1, "Play Game");
     multiplayerButton = addButton(2, tr->translateKey("menu.multiplayer"));
     addButton(3, "Mods");
+    addButton(6, "Skins");
     addButton(0, "Help & Options");
     addButton(5, "Language");
     if (!hideQuitButton)

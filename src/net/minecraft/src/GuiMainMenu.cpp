@@ -28,6 +28,7 @@
 #include "net/minecraft/src/legacy/LegacyMainMenuLayout.h"
 #include "net/minecraft/src/legacy/LegacyMenuHints.h"
 #include "net/minecraft/src/legacy/LegacyMenuNavigation.h"
+#include "skin/GuiSkinSelector.h"
 #include "net/minecraft/src/legacy/LegacyUiAssets.h"
 #include "net/minecraft/src/legacy/LegacyPanorama.h"
 #include "net/minecraft/src/legacy/LegacySceneLayout.h"
@@ -285,22 +286,23 @@ void GuiMainMenu::initGui()
         return;
     }
 
-    const int_t y = height / 4 + 48;
+    const int_t y = height / 4 + 40;
     controlList.push_back(new GuiButton(1, width / 2 - 100, y, tr->translateKey("menu.singleplayer")));
     controlList.push_back(multiplayerButton = new GuiButton(2, width / 2 - 100, y + 24, tr->translateKey("menu.multiplayer")));
     controlList.push_back(new GuiButton(3, width / 2 - 100, y + 48, "Mods"));
+    controlList.push_back(new GuiButton(6, width / 2 - 100, y + 72, "Skins"));
 
     if (mc->hideQuitButton)
     {
-        controlList.push_back(new GuiButton(0, width / 2 - 100, y + 72, tr->translateKey("menu.options")));
+        controlList.push_back(new GuiButton(0, width / 2 - 100, y + 96, tr->translateKey("menu.options")));
     }
     else
     {
-        controlList.push_back(new GuiButton(0, width / 2 - 100, y + 84, 98, 20, tr->translateKey("menu.options")));
-        controlList.push_back(new GuiButton(4, width / 2 + 2, y + 84, 98, 20, tr->translateKey("menu.quit")));
+        controlList.push_back(new GuiButton(0, width / 2 - 100, y + 96, 98, 20, tr->translateKey("menu.options")));
+        controlList.push_back(new GuiButton(4, width / 2 + 2, y + 96, 98, 20, tr->translateKey("menu.quit")));
     }
 
-    controlList.push_back(new GuiButtonLanguage(5, width / 2 - 124, y + 84));
+    controlList.push_back(new GuiButtonLanguage(5, width / 2 - 124, y + 96));
 #if !PLATFORM_PS2
     if (mc->session == nullptr)
         multiplayerButton->enabled = false;
@@ -332,6 +334,7 @@ void GuiMainMenu::actionPerformed(GuiButton *button)
     }
     if (button->id == 2) mc->displayGuiScreen(new GuiMultiplayer(this));
     if (button->id == 3) mc->displayGuiScreen(new GuiMods(this));
+    if (button->id == 6) mc->displayGuiScreen(new GuiSkinSelector(this));
     if (button->id == 4) mc->shutdown();
 }
 
