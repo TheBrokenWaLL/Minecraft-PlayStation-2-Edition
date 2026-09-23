@@ -1,6 +1,7 @@
 ﻿#include "java/File.h"
 
 #include "platform/Log.h"
+#include "platform/Resources.h"
 #include <queue>
 #include <string>
 #include <iostream>
@@ -200,35 +201,10 @@ File *File::open(const File &parent, const jstring &child)
 
 File *File::openResourceDirectory()
 {
-	// Get the path to the executable
-	char (*path) = (char*)malloc(PATH_MAX);
-	uint32_t length = PATH_MAX;
-	#ifdef __APPLE__
-	if (_NSGetExecutablePath(path, &length) != 0)
-	{
-	  	// Buffer size is too small.
-		length = -1;
-	}
-	#else
-	length = ::readlink("/proc/self/exe", path, sizeof(path) - 1);
-	#endif
-	if (length == -1)
-		return new File_Impl("");
-
-	path[length] = '\0';
-
-	// Convert to UTF-16
-	jstring u16str = FromPath(path);
-
-	// Remove the executable name
-	size_t pos = u16str.find_last_of(u'/');
-	if (pos == std::string::npos)
-		return new File_Impl("");
-
-	// Built-in visual/data assets live beside the executable in "assets".
-	File* file = new File_Impl(u16str.substr(0, pos) + "/assets");
-	free(path);
-	return file;
+    // Use the same executable-relative directory as GameResources. Keeping a
+    // second executable-path implementation here caused truncated Linux paths
+    // (sizeof(pointer) passed to readlink) and inconsistent fallback behavior.
+    return new File_Impl(PlatformResources::assetsDir());
 }
 
 File *File::openWorkingDirectory(const jstring &name)
