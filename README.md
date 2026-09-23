@@ -1,92 +1,34 @@
-## Building for PlayStation 2
+# Building
 
-![MC:PS2](https://drive.google.com/uc?export=view&id=1U29xSOC7pMjn4WNkd6KTkb78eKljMzT_)
+There are two build entry points, based on the platform profiles in the GitHub
+Actions workflow. Run either without arguments to select GCC, Wii or PS2.
 
-MC:PS2 includes automatic build scripts for Linux and Windows.
+## Linux
 
-The scripts check whether the required build tools and PS2 development environment are already installed. If something is missing, they will ask whether you want to install it automatically.
-
-The build process generates:
-
-```text
-bin/ps2/usb/MCBETA/OptiCraft.elf
-bin/ps2/usb/MCBETA/assets.pak
+```sh
+bash build_linux.sh
+bash build_linux.sh gcc -debug
+bash build_linux.sh wii -release --jobs 4
+bash build_linux.sh ps2
 ```
 
-The default PS2 build includes networking, multiplayer, sound, perspective-correct textures, and VU1 terrain rendering.
-
-### Linux
-
-From the project root, make the build script executable:
-
-```bash
-chmod +x build_ps2_linux.sh
-```
-
-Then run:
-
-```bash
-./build_ps2_linux.sh
-```
-
-For a completely clean build:
-
-```bash
-./build_ps2_linux.sh --clean
-```
-
-To automatically accept installation prompts:
-
-```bash
-./build_ps2_linux.sh --clean --yes
-```
-
-The script checks for the required build tools and PS2 development environment and offers to install anything that is missing.
-
-The default Linux PS2DEV location is:
-
-```text
-/usr/local/ps2dev
-```
-
-### Windows
-
-The Windows build script uses PowerShell.
-
-From the project root, run:
+## Windows (PowerShell 7.3+)
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\build_ps2_windows.ps1
+pwsh -File .\build_windows.ps1
+pwsh -File .\build_windows.ps1 gcc -Debug
+pwsh -File .\build_windows.ps1 wii -Release -Jobs 4
+pwsh -File .\build_windows.ps1 ps2
 ```
 
-For a completely clean build:
+Release is the default. GCC builds native Linux on Linux and Windows MinGW on
+Windows. Wii builds the full game. Console builds stage assets by default; PS2
+also regenerates `assets.pak`. SDKs and dependencies must already be installed.
+No source patches, downloads, package installations, or cleanup run automatically.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\build_ps2_windows.ps1 -Clean
-```
-
-To automatically accept installation prompts:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\build_ps2_windows.ps1 -Clean -Yes
-```
-
-The script checks for the required Windows build tools and PS2 development environment and offers to install anything that is missing.
-
-### Build Output
-
-After a successful build, the generated files can be found at:
-
-```text
-bin/ps2/usb/MCBETA/
-```
-
-The main build files are:
-
-```text
-OptiCraft.elf
-assets.pak
-```
+The old `build_ps2_*` entry points
+and `scr_build_linux` / `scr_build_win` collections have been retired. Extra CMake
+options replace the old specialized profiles. Assets, saves and SDKs are unchanged.
 
 ---
 
