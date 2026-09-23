@@ -6,7 +6,7 @@
 #include "LegacyHeritageOptions.h"
 #include "LegacyLanguageOptions.h"
 #include "LegacyVideoOptions.h"
-#include "LegacyViewOptions.h"
+#include "net/minecraft/src/GuiAudioOptions.h"
 #include "net/minecraft/src/GameSettings.h"
 #include "net/minecraft/src/Minecraft.h"
 #include "platform/PlatformConfig.h"
@@ -21,7 +21,7 @@ enum LegacyHelpButtonId
     BUTTON_TEXTURE_PACKS = 106,
     BUTTON_LANGUAGE = 102,
     BUTTON_HERITAGE = 103,
-    BUTTON_VIEW = 104,
+    BUTTON_AUDIO = 104,
     BUTTON_BACK = 200
 };
 }
@@ -37,19 +37,19 @@ void LegacyHelpOptions::initGui()
     configureLegacyLayout(7, false, LegacyOptionsLayoutPreset::Compact);
     const std::string labels[] = {
         uiText("Video"),
-        uiText("Controls"),
+        uiText("Audio"),
         uiText("Language"),
+        uiText("Controls"),
         PLATFORM_PS2 ? uiText("Game Options") : uiText("OptiCraft Options"),
-        uiText("View"),
         uiText("Texture Packs"),
         uiText("Back")
     };
     const int_t ids[] = {
         BUTTON_VIDEO,
-        BUTTON_CONTROLS,
+        BUTTON_AUDIO,
         BUTTON_LANGUAGE,
+        BUTTON_CONTROLS,
         BUTTON_HERITAGE,
-        BUTTON_VIEW,
         BUTTON_TEXTURE_PACKS,
         BUTTON_BACK
     };
@@ -84,8 +84,8 @@ void LegacyHelpOptions::actionPerformed(GuiButton *button)
     case BUTTON_HERITAGE:
         mc->displayGuiScreen(new LegacyHeritageOptions(this, settings, backgroundMode));
         return;
-    case BUTTON_VIEW:
-        mc->displayGuiScreen(new LegacyViewOptions(this, settings, backgroundMode));
+    case BUTTON_AUDIO:
+        mc->displayGuiScreen(new GuiAudioOptions(this, settings, backgroundMode));
         return;
     case BUTTON_BACK:
         returnToParent();

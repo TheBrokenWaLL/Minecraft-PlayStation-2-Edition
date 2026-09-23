@@ -27,6 +27,7 @@ enum LegacyVideoButtonId
     BUTTON_BRIGHTNESS = 306,
     BUTTON_DEFLICKER = 307,
     BUTTON_ASPECT_RATIO = 308,
+    BUTTON_FOV = 309,
     BUTTON_DONE = 399
 };
 
@@ -42,11 +43,11 @@ LegacyVideoOptions::LegacyVideoOptions(GuiScreen *parent, GameSettings *settings
 void LegacyVideoOptions::initGui()
 {
 #if PLATFORM_WII
-    const int_t rowCount = 7;
-#elif PLATFORM_PS2
-    const int_t rowCount = 7;
-#else
     const int_t rowCount = 8;
+#elif PLATFORM_PS2
+    const int_t rowCount = 8;
+#else
+    const int_t rowCount = 9;
 #endif
     configureLegacyLayout(rowCount, true, LegacyOptionsLayoutPreset::Compact);
     const int_t x = legacyLayout.contentX;
@@ -87,6 +88,8 @@ void LegacyVideoOptions::initGui()
     deflickerCheckbox = nullptr;
 #endif
 
+    controlList.push_back(new LegacyOptionSlider(BUTTON_FOV, x, legacyLayout.rowY(row++), w, h,
+        settings, EnumOptions::FOV));
     controlList.push_back(new LegacyOptionSlider(BUTTON_RENDER_DISTANCE, x, legacyLayout.rowY(row++), w, h,
         settings, EnumOptions::RENDER_DISTANCE_FINE));
     controlList.push_back(new LegacyOptionSlider(BUTTON_BRIGHTNESS, x, legacyLayout.rowY(row++), w, h,
