@@ -14,7 +14,7 @@ constexpr int_t LEGACY_MENU_MIN_BUTTON_HEIGHT = 16;
 
 int_t legacyMainMenuButtonCount(bool hideQuitButton)
 {
-    return hideQuitButton ? 4 : 5;
+    return hideQuitButton ? 5 : 6;
 }
 
 LegacyMainMenuLayout legacyMainMenuLayout(int_t screenWidth, int_t screenHeight, int_t buttonCount)
@@ -51,7 +51,8 @@ LegacyMainMenuLayout legacyMainMenuLayout(int_t screenWidth, int_t screenHeight,
 
     const int_t menuHeight = safeButtonCount * layout.buttonHeight +
         (safeButtonCount - 1) * layout.buttonSpacing;
-    const int_t bottomMargin = screenHeight >= 200 ? 8 : 4;
+    // Reserve two footer lines for the build version and controller hints.
+    const int_t bottomMargin = screenHeight >= 200 ? 39 : 31;
     const int_t maximumFirstY = std::max<int_t>(4, screenHeight - bottomMargin - menuHeight);
     const LegacySceneLayout scene = legacySceneLayout(screenWidth, screenHeight);
     // On short windows, centering against the whole screen places the column too

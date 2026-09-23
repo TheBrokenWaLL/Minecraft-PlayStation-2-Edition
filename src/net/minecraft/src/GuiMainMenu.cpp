@@ -1,5 +1,10 @@
+#ifndef OPTICRAFT_BUILD_VERSION
+#define OPTICRAFT_BUILD_VERSION "unknown"
+#endif
+
 #include "net/minecraft/src/UiStrings.h"
 #include "GuiMainMenu.h"
+#include "mods/GuiMods.h"
 #include "platform/Log.h"
 #include "platform/PlatformConfig.h"
 #include "java/String.h"
@@ -286,14 +291,15 @@ void GuiMainMenu::initGui()
         return;
     }
 
-    const int_t y = height / 4 + 40;
+    const int_t y = std::min<int_t>(height / 4 + 40, height - 140);
     controlList.push_back(new GuiButton(1, width / 2 - 100, y, tr->translateKey("menu.singleplayer")));
     controlList.push_back(multiplayerButton = new GuiButton(2, width / 2 - 100, y + 24, tr->translateKey("menu.multiplayer")));
 
-    controlList.push_back(new GuiButton(0, width / 2 - 100, y + 48, 98, 20, tr->translateKey("menu.options")));
-    controlList.push_back(new GuiButton(5, width / 2 + 2, y + 48, 98, 20, uiText("Credits")));
+    controlList.push_back(new GuiButton(3, width / 2 - 100, y + 48, uiText("Mods")));
+    controlList.push_back(new GuiButton(0, width / 2 - 100, y + 72, 98, 20, tr->translateKey("menu.options")));
+    controlList.push_back(new GuiButton(5, width / 2 + 2, y + 72, 98, 20, uiText("Credits")));
     if (!mc->hideQuitButton)
-        controlList.push_back(new GuiButton(4, width / 2 - 100, y + 72, tr->translateKey("menu.quit")));
+        controlList.push_back(new GuiButton(4, width / 2 - 100, y + 96, tr->translateKey("menu.quit")));
 #if !PLATFORM_PS2
     if (mc->session == nullptr)
         multiplayerButton->enabled = false;
@@ -328,6 +334,7 @@ void GuiMainMenu::actionPerformed(GuiButton *button)
         else
             mc->displayGuiScreen(new GuiSelectWorld(this));
     }
+    if (button->id == 3) mc->displayGuiScreen(new GuiMods(this));
     if (button->id == 2) mc->displayGuiScreen(new GuiMultiplayer(this));
     if (button->id == 4) mc->shutdown();
 }
@@ -598,6 +605,14 @@ void GuiMainMenu::drawScreen(int_t mouseX, int_t mouseY, float_t partialTick)
         syncLegacySelection();
         drawLegacyMenuHints(mc, width, height, false);
     }
+
+    // Keep a separate footer line so neither controller hints nor the
+    // existing copyright notice is covered at console resolutions.
+    const std::string buildLabel = fontRenderer->trimStringToWidth(
+        uiText("Build") + " " + OPTICRAFT_BUILD_VERSION, std::max<int_t>(1, width - 16));
+    drawString(fontRenderer, buildLabel,
+        std::max<int_t>(8, width - fontRenderer->getStringWidth(buildLabel) - 8),
+        legacyUi ? legacyHintRowY(height) - 12 : height - 22, 0xa0a0a0);
 
     GuiScreen::drawScreen(mouseX, mouseY, partialTick);
 }

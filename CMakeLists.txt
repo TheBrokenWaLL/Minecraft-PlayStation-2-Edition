@@ -1,10 +1,15 @@
 cmake_minimum_required(VERSION 3.21)
 
 project(OptiCraftHeritage
-    VERSION 1.7.3
+    VERSION 1.0.2
     DESCRIPTION "OptiCraft Heritage - heavily modified clean-room C++ implementation"
     LANGUAGES C CXX
 )
+
+# Share the release version with the main menu on every platform. Limit the
+# definition to this translation unit so version bumps do not rebuild the game.
+set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/src/net/minecraft/src/GuiMainMenu.cpp"
+    APPEND PROPERTY COMPILE_DEFINITIONS "OPTICRAFT_BUILD_VERSION=\"${PROJECT_VERSION}\"")
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/SourceSelection.cmake)
 
