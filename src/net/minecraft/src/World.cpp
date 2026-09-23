@@ -106,8 +106,8 @@
 #include "platform/ExtendedProfiler.h"
 #if PLATFORM_FAST_BLOCK_COLLISIONS || PLATFORM_EARLY_COLLISION_EXIT || PLATFORM_FLOAT_COLLISION_SWEEP
 #include "platform/world/PlatformBlockCollisionSweeper.h"
-#include "platform/world/StreamingFrameBudget.h"
 #endif
+#include "platform/world/StreamingFrameBudget.h"
 
 #if PLATFORM_BOUNDED_WORLD
 static int_t platformFindTopSpawnBlockY(World *world, int_t x, int_t z)

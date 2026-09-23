@@ -584,6 +584,7 @@ void WorldRenderer::markDirty()
 	needsUpdate = true;
 }
 
+#if defined(WII_PLATFORM) || defined(PS2_PLATFORM) || PLATFORM_PC_LEGACY
 void WorldRenderer::markDirtyFromLighting()
 {
 #if PLATFORM_COALESCE_MESH_REBUILDS
@@ -615,10 +616,14 @@ void WorldRenderer::markDirtyFromLighting()
 	markDirty();
 }
 
+#endif
+
 void WorldRenderer::setDontDraw()
 {
 	// Whatever edit marked this renderer urgent was at its old position.
+#if defined(WII_PLATFORM) || defined(PS2_PLATFORM) || PLATFORM_PC_LEGACY
 	urgentRebuild = false;
+#endif
 #if PLATFORM_PC_LEGACY
 	pcLegacyResetBuildState();
 	for (int_t face = 0; face < 6; ++face)
