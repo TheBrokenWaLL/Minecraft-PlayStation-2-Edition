@@ -31,7 +31,9 @@ int_t controlIconTexture(Minecraft *mc, const std::string &label)
     if (it == available.end())
     {
         std::string path(prefix);
-        for (unsigned char c : label)
+        // Punctuation-only button names otherwise collide at "_".
+        const std::string iconLabel = label == "+" ? "plus" : label == "-" ? "minus" : label;
+        for (unsigned char c : iconLabel)
         {
             if (c >= 'A' && c <= 'Z') c += 'a' - 'A';
             path += (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ? char(c) : '_';

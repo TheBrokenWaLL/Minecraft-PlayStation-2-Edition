@@ -391,3 +391,6 @@ ninja.exe
 extracted_assets/
 extracted_assets_vanilla/
 *.pak
+
+scripts/AUDIO_RECOVERY.md
+scripts/CONTROL_ICON_ASSETS.md
