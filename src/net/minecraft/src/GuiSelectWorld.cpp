@@ -11,15 +11,18 @@
 #include "GuiRenameWorld.h"
 #include "StringTranslate.h"
 #include "ISaveFormat.h"
+#include "ISaveHandler.h"
 #include "SaveFormatComparator.h"
 #include "MathHelper.h"
 #include "PlayerControllerSP.h"
 #include "PlayerControllerCreative.h"
 #include "WorldSettings.h"
+#include "WorldInfo.h"
 #include "Minecraft.h"
 #include "java/String.h"
 #include <algorithm>
 #include <ctime>
+#include <memory>
 
 GuiSelectWorld::GuiSelectWorld(GuiScreen *parent)
 	: screenTitle(uiText("Select world"))
@@ -128,6 +131,11 @@ void GuiSelectWorld::actionPerformed(GuiButton *button)
 
 void GuiSelectWorld::selectWorld(int_t i)
 {
+	loadWorld(i, -1);
+}
+
+void GuiSelectWorld::loadWorld(int_t i, int_t requestedDifficulty)
+{
     if (i < 0 || i >= static_cast<int_t>(saveList.size())) return;
 #ifdef PS2_PLATFORM
     if (!Ps2SaveStorage::available(Ps2SaveStorage::target()))
@@ -137,6 +145,24 @@ void GuiSelectWorld::selectWorld(int_t i)
         return;
     }
 #endif
+
+    ISaveFormat *fmt = mc->getSaveLoader();
+    std::string fname = getSaveFileName(i);
+    if (fname.empty()) fname = "World" + std::to_string(i);
+
+    if (requestedDifficulty >= 0 && fmt != nullptr)
+    {
+        std::unique_ptr<WorldInfo> info(fmt->getWorldInfo(fname));
+        if (info)
+        {
+            const int_t difficulty = info->isHardcoreModeEnabled() ? 3 :
+                std::max<int_t>(0, std::min<int_t>(3, requestedDifficulty));
+            info->setDifficulty(difficulty);
+            std::unique_ptr<ISaveHandler> handler(fmt->getSaveLoader(fname, false));
+            if (handler) handler->saveWorldInfo(info.get());
+        }
+    }
+
 	mc->displayGuiScreen(nullptr);
 	if (selected) return;
 	selected = true;
@@ -146,11 +172,34 @@ void GuiSelectWorld::selectWorld(int_t i)
 		mc->playerController = new PlayerControllerSP(mc);
 	else
 		mc->playerController = new PlayerControllerCreative(mc);
-	std::string fname = getSaveFileName(i);
-	if (fname.empty()) fname = "World" + std::to_string(i);
 	mc->startWorld(fname, getSaveName(i), static_cast<WorldSettings *>(nullptr));
 	if (mc->theWorld != nullptr) mc->displayGuiScreen(nullptr);
     else selected = false;
+}
+
+void GuiSelectWorld::deleteWorldFromEditor(int_t i)
+{
+    if (i < 0 || i >= static_cast<int_t>(saveList.size()))
+    {
+        mc->displayGuiScreen(this);
+        return;
+    }
+#ifdef PS2_PLATFORM
+    if (!Ps2SaveStorage::available(Ps2SaveStorage::target()))
+    {
+        mc->displayGuiScreen(new GuiStorageMessage(this, mc->gameSettings,
+            "World storage unavailable. Check the selected device in Game Options."));
+        return;
+    }
+#endif
+    ISaveFormat *fmt = mc->getSaveLoader();
+    if (fmt != nullptr)
+    {
+        fmt->flushCache();
+        fmt->deleteWorldDirectory(getSaveFileName(i));
+        loadSaves();
+    }
+    mc->displayGuiScreen(this);
 }
 
 void GuiSelectWorld::deleteWorld(bool confirmed, int_t i)

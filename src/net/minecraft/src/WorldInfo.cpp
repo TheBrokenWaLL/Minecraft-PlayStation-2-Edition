@@ -13,6 +13,8 @@ WorldInfo::WorldInfo(NBTTagCompound *nbttagcompound)
 	gameType = nbttagcompound->getInteger("GameType");
 	mapFeaturesEnabled = nbttagcompound->hasKey("MapFeatures") ? nbttagcompound->getBoolean("MapFeatures") : true;
 	hardcore = nbttagcompound->getBoolean("hardcore");
+	difficulty = nbttagcompound->hasKey("Difficulty") ? nbttagcompound->getInteger("Difficulty") : -1;
+	if (difficulty < 0 || difficulty > 3) difficulty = -1;
 	terrainType = WorldType::DEFAULT;
 	if (nbttagcompound->hasKey("generatorName"))
 	{
@@ -67,6 +69,7 @@ WorldInfo::WorldInfo(long_t l, const jstring &s)
 	gameType = 0;
 	mapFeaturesEnabled = true;
 	hardcore = false;
+	difficulty = -1;
 	raining = false;
 	rainTime = 0;
 	thundering = false;
@@ -81,6 +84,7 @@ WorldInfo::WorldInfo(WorldSettings *settings, const jstring &s)
 	gameType = settings != nullptr ? settings->getGameType() : 0;
 	mapFeaturesEnabled = settings == nullptr || settings->isMapFeaturesEnabled();
 	hardcore = settings != nullptr && settings->getHardcoreEnabled();
+	difficulty = -1;
 	levelName = s;
 	spawnX = 0;
 	spawnY = 0;
@@ -104,6 +108,7 @@ WorldInfo::WorldInfo(WorldInfo *worldinfo)
 	gameType = worldinfo->gameType;
 	mapFeaturesEnabled = worldinfo->mapFeaturesEnabled;
 	hardcore = worldinfo->hardcore;
+	difficulty = worldinfo->difficulty;
 	spawnX = worldinfo->spawnX;
 	spawnY = worldinfo->spawnY;
 	spawnZ = worldinfo->spawnZ;
@@ -179,6 +184,8 @@ void WorldInfo::updateTagCompound(NBTTagCompound *nbttagcompound, NBTTagCompound
 	nbttagcompound->setInteger("thunderTime", thunderTime);
 	nbttagcompound->setBoolean("thundering", thundering);
 	nbttagcompound->setBoolean("hardcore", hardcore);
+	if (difficulty >= 0)
+		nbttagcompound->setInteger("Difficulty", difficulty);
 	if (nbttagcompound1 != nullptr)
 	{
 		if (nbttagcompound1 == playerTag)
@@ -232,5 +239,12 @@ int_t WorldInfo::getGameType() { return gameType; }
 void WorldInfo::setGameType(int_t gameTypeValue) { gameType = gameTypeValue; }
 bool WorldInfo::isMapFeaturesEnabled() { return mapFeaturesEnabled; }
 bool WorldInfo::isHardcoreModeEnabled() { return hardcore; }
+int_t WorldInfo::getDifficulty() { return difficulty; }
+void WorldInfo::setDifficulty(int_t difficultyValue)
+{
+	if (difficultyValue < 0) difficulty = -1;
+	else if (difficultyValue > 3) difficulty = 3;
+	else difficulty = difficultyValue;
+}
 WorldType *WorldInfo::getTerrainType() { return terrainType; }
 void WorldInfo::setTerrainType(WorldType *type) { terrainType = type != nullptr ? type : WorldType::DEFAULT; }

@@ -19,6 +19,7 @@
 #include "net/minecraft/src/BlockGrass.h"
 #include "net/minecraft/src/FontRenderer.h"
 #include "net/minecraft/src/GuiButton.h"
+#include "net/minecraft/src/GuiWorldEdit.h"
 #include "net/minecraft/src/Minecraft.h"
 #include "net/minecraft/src/RenderEngine.h"
 #include "net/minecraft/src/SoundManager.h"
@@ -372,7 +373,10 @@ void LegacyPlayGameScreen::actionPerformed(GuiButton *button)
     {
         const int_t index = button->id - BUTTON_WORLD_BASE;
         if (index >= 0 && index < static_cast<int_t>(saveList.size()))
-            selectWorld(index);
+        {
+            mc->displayGuiScreen(new GuiWorldEdit(this, mc->gameSettings, index,
+                getSaveFileName(index), getSaveName(index)));
+        }
     }
 }
 

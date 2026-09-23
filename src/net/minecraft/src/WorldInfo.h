@@ -64,6 +64,8 @@ public:
 	void setGameType(int_t gameType);
 	bool isMapFeaturesEnabled();
 	bool isHardcoreModeEnabled();
+	int_t getDifficulty();
+	void setDifficulty(int_t difficulty);
 	WorldType *getTerrainType();
 	void setTerrainType(WorldType *type);
 
@@ -83,6 +85,7 @@ private:
 	int_t gameType;
 	bool mapFeaturesEnabled;
 	bool hardcore;
+	int_t difficulty;
 	bool raining;
 	int_t rainTime;
 	bool thundering;

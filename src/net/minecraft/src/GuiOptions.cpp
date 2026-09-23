@@ -75,8 +75,15 @@ void GuiOptions::actionPerformed(GuiButton *button)
 
 	if (button->id < 100 && dynamic_cast<GuiSmallButton *>(button))
 	{
-		options->setOptionValue(static_cast<GuiSmallButton *>(button)->returnEnumOptions(), 1);
+		EnumOptions *option = static_cast<GuiSmallButton *>(button)->returnEnumOptions();
+		options->setOptionValue(option, 1);
 		button->displayString = options->getKeyBinding(EnumOptions::getEnumOptions(button->id));
+		if (option == EnumOptions::DIFFICULTY && mc != nullptr && !mc->isMultiplayerWorld() &&
+		    mc->theWorld != nullptr && mc->theWorld->getWorldInfo() != nullptr &&
+		    !mc->theWorld->getWorldInfo()->isHardcoreModeEnabled())
+		{
+			mc->theWorld->getWorldInfo()->setDifficulty(options->difficulty);
+		}
 	}
 	if (button->id == 101)
 	{

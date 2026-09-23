@@ -1875,12 +1875,23 @@ void Minecraft::runTick()
                 ClientProfiler::tickPhase("joinChunks", System::nanoTime() - clientPhaseStartNs);
             }
         }
-        if (theWorld->getWorldInfo() != nullptr && theWorld->getWorldInfo()->isHardcoreModeEnabled())
-            theWorld->difficultySetting = 3;
-        else
-            theWorld->difficultySetting = gameSettings->difficulty;
+        WorldInfo *activeWorldInfo = theWorld->getWorldInfo();
         if (theWorld->multiplayerWorld)
+        {
             theWorld->difficultySetting = 1;
+        }
+        else if (activeWorldInfo != nullptr && activeWorldInfo->isHardcoreModeEnabled())
+        {
+            theWorld->difficultySetting = 3;
+        }
+        else if (activeWorldInfo != nullptr && activeWorldInfo->getDifficulty() >= 0)
+        {
+            theWorld->difficultySetting = activeWorldInfo->getDifficulty();
+        }
+        else
+        {
+            theWorld->difficultySetting = gameSettings->difficulty;
+        }
 
         if (!isGamePaused)
         {
@@ -2038,6 +2049,22 @@ void Minecraft::startWorld(ISaveFormat *saveFormat, const std::string &s, const 
     WorldLoadTrace::step("new World");
     platformHardwareCheckpoint("before new World");
     World *world = new World(isavehandler, s1, settings);
+    if (world->getWorldInfo() != nullptr)
+    {
+        WorldInfo *worldInfo = world->getWorldInfo();
+        if (worldInfo->isHardcoreModeEnabled())
+        {
+            worldInfo->setDifficulty(3);
+        }
+        else if (worldInfo->getDifficulty() < 0)
+        {
+            int_t fallbackDifficulty = gameSettings != nullptr ? gameSettings->difficulty : 1;
+            if (fallbackDifficulty < 0) fallbackDifficulty = 0;
+            if (fallbackDifficulty > 3) fallbackDifficulty = 3;
+            worldInfo->setDifficulty(fallbackDifficulty);
+        }
+        world->difficultySetting = worldInfo->getDifficulty();
+    }
     world->setNaturalMobSpawningEnabled(options.naturalMobSpawningEnabled);
     platformHardwareCheckpoint("after new World");
     WorldLoadTrace::step("changeWorld2");

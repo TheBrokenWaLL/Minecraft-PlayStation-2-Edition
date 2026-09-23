@@ -29,6 +29,8 @@ protected:
 public:
 	void actionPerformed(GuiButton *button) override;
 	void selectWorld(int_t index);
+	void loadWorld(int_t index, int_t difficulty);
+	void deleteWorldFromEditor(int_t index);
 	void deleteWorld(bool confirmed, int_t index) override;
 	void drawScreen(int_t mouseX, int_t mouseY, float_t partialTick) override;
 
