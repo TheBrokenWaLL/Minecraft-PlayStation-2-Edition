@@ -2,6 +2,7 @@
 #include "LegacyHeritageOptions.h"
 
 #include "LegacyGuiButton.h"
+#include "LegacyMenuHints.h"
 #include "net/minecraft/src/skin/GuiSkinSelector.h"
 #include "LegacyHeritagePolicy.h"
 #include "LegacyOptionCheckbox.h"
@@ -53,7 +54,7 @@ LegacyHeritageOptions::~LegacyHeritageOptions()
 
 void LegacyHeritageOptions::initGui()
 {
-    int_t rowCount = 5; // name label/field, Legacy UI/Look, paired Change Skin/Done
+    int_t rowCount = 6; // name label/field, Legacy UI/Look, Change Skin, Done
 #ifdef PS2_PLATFORM
     ++rowCount;
 #endif
@@ -68,6 +69,15 @@ void LegacyHeritageOptions::initGui()
 #endif
 
     configureLegacyLayout(rowCount, true, LegacyOptionsLayoutPreset::Compact);
+    // Keep separate full-width actions even on the shortest console viewport.
+    const int_t available = legacyHintRowY(height) - 4 - legacyLayout.firstRowY;
+    if (rowCount * legacyLayout.rowHeight + (rowCount - 1) * legacyLayout.rowSpacing > available)
+    {
+        legacyLayout.rowSpacing = 1;
+        legacyLayout.rowHeight = std::max<int_t>(12, (available - rowCount + 1) / rowCount);
+        legacyLayout.panelHeight = legacyLayout.firstRowY - legacyLayout.panelY +
+            rowCount * legacyLayout.rowHeight + rowCount - 1 + 4;
+    }
     const int_t x = legacyLayout.contentX;
     const int_t w = legacyLayout.contentWidth;
     const int_t h = legacyLayout.rowHeight;
@@ -112,9 +122,8 @@ void LegacyHeritageOptions::initGui()
 #ifdef PS2_PLATFORM
     controlList.push_back(new LegacyGuiButton(607, x, legacyLayout.rowY(row++), w, h, uiText("World Storage")));
 #endif
-    const int_t halfWidth = (w - 4) / 2;
-    controlList.push_back(new LegacyGuiButton(BUTTON_CHANGE_SKIN, x, legacyLayout.rowY(row), halfWidth, h, uiText("Change Skin")));
-    controlList.push_back(new LegacyGuiButton(BUTTON_DONE, x + halfWidth + 4, legacyLayout.rowY(row), w - halfWidth - 4, h, uiText("Done")));
+    controlList.push_back(new LegacyGuiButton(BUTTON_CHANGE_SKIN, x, legacyLayout.rowY(row++), w, h, uiText("Change Skin")));
+    controlList.push_back(new LegacyGuiButton(BUTTON_DONE, x, legacyLayout.rowY(row), w, h, uiText("Done")));
 }
 
 void LegacyHeritageOptions::saveIdentity()

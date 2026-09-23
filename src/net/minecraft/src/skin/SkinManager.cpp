@@ -20,9 +20,9 @@ void SkinManager::init()
     s_skins.push_back({
         "LegacySteve",
         "Steve",
-        "/skins/LegacySteve.png",
-        "/skins/LegacySteve_32.png",
-        "/skins/LegacySteve_Front.png"
+        getDefaultSkinTexture(),
+        getDefaultSkinTexture(),
+        getDefaultSkinTexture()
     });
 
     // 2. Alex (immediately to the right of Steve)

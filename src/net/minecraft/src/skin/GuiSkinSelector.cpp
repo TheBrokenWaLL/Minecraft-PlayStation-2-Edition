@@ -448,10 +448,35 @@ void GuiSkinSelector::drawFrontPreview(const std::string &path, float x, float y
 
     Tessellator &tess = Tessellator::instance;
     tess.startDrawingQuads();
+    if (path == SkinManager::getDefaultSkinTexture())
+    {
+        // Compose a front view from the bundled 64x32 character atlas, rather
+        // than treating the skin UV layout as a pre-rendered portrait.
+        auto part = [&](float px, float py, float pw, float ph, float u, float v, float uw, float vh, bool flip = false)
+        {
+            const float x0 = x + px * w / 16, x1 = x0 + pw * w / 16;
+            const float y0 = y + py * h / 32, y1 = y0 + ph * h / 32;
+            float u0 = u / 64, u1 = (u + uw) / 64;
+            if (flip) std::swap(u0, u1);
+            tess.addVertexWithUV(x0, y1, zLevel, u0, (v + vh) / 32);
+            tess.addVertexWithUV(x1, y1, zLevel, u1, (v + vh) / 32);
+            tess.addVertexWithUV(x1, y0, zLevel, u1, v / 32);
+            tess.addVertexWithUV(x0, y0, zLevel, u0, v / 32);
+        };
+        part(4, 0, 8, 8, 8, 8, 8, 8);
+        part(4, 8, 8, 12, 20, 20, 8, 12);
+        part(0, 8, 4, 12, 44, 20, 4, 12);
+        part(12, 8, 4, 12, 44, 20, 4, 12, true);
+        part(4, 20, 4, 12, 4, 20, 4, 12);
+        part(8, 20, 4, 12, 4, 20, 4, 12, true);
+    }
+    else
+    {
     tess.addVertexWithUV(x,     y + h, zLevel, 0.0f, 1.0f);
     tess.addVertexWithUV(x + w, y + h, zLevel, 1.0f, 1.0f);
     tess.addVertexWithUV(x + w, y,     zLevel, 1.0f, 0.0f);
     tess.addVertexWithUV(x,     y,     zLevel, 0.0f, 0.0f);
+    }
     tess.draw();
 
     renderColor4f(1.0f, 1.0f, 1.0f, 1.0f);
