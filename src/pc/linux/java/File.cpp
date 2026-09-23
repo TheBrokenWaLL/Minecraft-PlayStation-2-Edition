@@ -110,15 +110,14 @@ public:
 		if (::stat(u8path.c_str(), &buffer) != 0)
 			return false;
 		
-    /* We check that st_mtime is a macro here in order to give us confidence
-     * that struct stat has a struct timespec st_mtim member. We need this
-     * check because there are some platforms that claim to be POSIX 2008
-     * compliant but which do not have st_mtim... */
-	#if (PLATFORM_POSIX_VERSION >= 200809L) && defined(st_mtime)
+#if defined(__APPLE__)
+        return buffer.st_mtimespec.tv_sec * 1000LL + buffer.st_mtimespec.tv_nsec / 1000000LL;
+#elif defined(__linux__) || ((PLATFORM_POSIX_VERSION >= 200809L) && defined(st_mtime))
         return buffer.st_mtim.tv_sec * 1000LL + buffer.st_mtim.tv_nsec / 1000000LL;
-	#else
-		return buffer.st_mtime * 1000LL + buffer.st_mtimespec.tv_nsec / 1000000LL;
-	#endif
+#else
+        // Other POSIX targets may only expose second-resolution timestamps.
+        return buffer.st_mtime * 1000LL;
+#endif
 	}
 
 	long_t length() const override
