@@ -596,7 +596,7 @@ void GuiMainMenu::drawScreen(int_t mouseX, int_t mouseY, float_t partialTick)
     else
     {
         syncLegacySelection();
-        drawLegacyMenuHints(fontRenderer, width, height, false);
+        drawLegacyMenuHints(mc, width, height, false);
     }
 
     GuiScreen::drawScreen(mouseX, mouseY, partialTick);

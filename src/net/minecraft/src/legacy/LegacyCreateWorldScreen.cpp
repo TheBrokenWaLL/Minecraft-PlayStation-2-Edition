@@ -473,7 +473,7 @@ void LegacyCreateWorldScreen::drawLegacyScene(float_t partialTick)
 
 void LegacyCreateWorldScreen::drawMenuControlHints()
 {
-    drawLegacyMenuHints(fontRenderer, width, height, true);
+    drawLegacyMenuHints(mc, width, height, true);
 }
 
 void LegacyCreateWorldScreen::drawScreen(int_t mouseX, int_t mouseY, float_t partialTick)

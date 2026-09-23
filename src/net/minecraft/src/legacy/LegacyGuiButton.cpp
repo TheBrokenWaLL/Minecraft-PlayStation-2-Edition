@@ -1,3 +1,4 @@
+#include "net/minecraft/src/ControlIcon.h"
 #include "LegacyGuiButton.h"
 #include "net/minecraft/src/FontRenderer.h"
 
@@ -61,7 +62,7 @@ void LegacyGuiButton::drawButton(Minecraft *mc, int_t mouseX, int_t mouseY)
     // The same crisp emboss the sliders and the panel labels use. Java's soft
     // 38 % black shadow smeared the glyphs into the button frame, which read as a
     // dark, muddy label next to a slider drawn right above it.
-    legacyDrawCenteredOptionText(mc->fontRenderer, mc->fontRenderer->trimStringToWidth(displayString, width - 8), xPosition + width / 2,
+    legacyDrawCenteredOptionText(mc->fontRenderer, mc->fontRenderer->trimStringToWidth(buttonLabelWithoutEllipsis(displayString), width - 8), xPosition + width / 2,
         legacyGuiButtonTextY(yPosition, height), visual.textColor);
 }
 

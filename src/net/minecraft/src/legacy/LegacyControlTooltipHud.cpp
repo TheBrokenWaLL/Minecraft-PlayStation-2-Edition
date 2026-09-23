@@ -1,3 +1,4 @@
+#include "net/minecraft/src/ControlIcon.h"
 #include "net/minecraft/src/UiStrings.h"
 #include "LegacyControlTooltipHud.h"
 
@@ -97,6 +98,7 @@ struct PromptRow
     std::string labels[PROMPT_COUNT];
     std::string texts[PROMPT_COUNT];
     int_t x[PROMPT_COUNT];
+    int_t icons[PROMPT_COUNT] = {-1, -1, -1, -1};
     int_t y;
     int_t screenWidth;
     int_t screenHeight;
@@ -118,7 +120,7 @@ PromptRow s_row;
 
 // True when the cached row can be drawn as it stands. The labels are read into
 // the row either way, so a miss leaves them already refreshed for the rebuild.
-bool refreshRowKey(const GameSettings &settings, FontRenderer *font, PromptRow &row,
+bool refreshRowKey(Minecraft *mc, const GameSettings &settings, FontRenderer *font, PromptRow &row,
                    int_t screenWidth, int_t screenHeight)
 {
     const unsigned int fontRevision = font != nullptr ? font->getTextCacheRevision() : 0u;
@@ -130,6 +132,9 @@ bool refreshRowKey(const GameSettings &settings, FontRenderer *font, PromptRow &
         std::string label = legacyControlPromptLabel(settings, actionAt(i));
         if (hit && label != row.labels[i])
             hit = false;
+        const int_t icon = controlIconTexture(mc, label);
+        if (row.icons[i] != icon) hit = false;
+        row.icons[i] = icon;
         row.labels[i] = label;
     }
     return hit;
@@ -140,7 +145,7 @@ void rebuildRow(const GameSettings &settings, FontRenderer *font, PromptRow &row
 {
     for (int_t i = 0; i < PROMPT_COUNT; ++i)
     {
-        row.texts[i] = prompt(settings, actionAt(i));
+        row.texts[i] = row.icons[i] >= 0 ? actionName(actionAt(i)) : prompt(settings, actionAt(i));
         row.x[i] = 0;
     }
 
@@ -157,7 +162,8 @@ void rebuildRow(const GameSettings &settings, FontRenderer *font, PromptRow &row
     if (visible <= 0)
         return;
 
-    const int_t textWidth = contentWidth(font, row.texts, PROMPT_COUNT);
+    int_t textWidth = contentWidth(font, row.texts, PROMPT_COUNT);
+    for (int_t i = 0; i < PROMPT_COUNT; ++i) if (row.icons[i] >= 0) textWidth += 15;
     const int_t availableWidth = std::max<int_t>(0, screenWidth - LEGACY_HINT_MARGIN * 2);
     int_t gap = LEGACY_HINT_GAP;
     if (visible > 1 && textWidth + gap * (visible - 1) > availableWidth)
@@ -170,7 +176,7 @@ void rebuildRow(const GameSettings &settings, FontRenderer *font, PromptRow &row
         if (row.texts[i].empty())
             continue;
         row.x[i] = x;
-        x += font->getStringWidth(row.texts[i]) + gap;
+        x += font->getStringWidth(row.texts[i]) + gap + (row.icons[i] >= 0 ? 15 : 0);
     }
 }
 
@@ -180,7 +186,7 @@ void emitRow(FontRenderer *font, const PromptRow &row)
     {
         if (row.texts[i].empty())
             continue;
-        font->drawStringWithShadow(row.texts[i], row.x[i], row.y, 0xffffff);
+        font->drawStringWithShadow(row.texts[i], row.x[i] + (row.icons[i] >= 0 ? 15 : 0), row.y, 0xffffff);
     }
 }
 
@@ -238,7 +244,7 @@ void LegacyControlTooltipHud::render(Minecraft *mc, int_t screenWidth, int_t scr
     const GameSettings &settings = *mc->gameSettings;
     FontRenderer *font = mc->fontRenderer;
 
-    if (!refreshRowKey(settings, font, s_row, screenWidth, screenHeight))
+    if (!refreshRowKey(mc, settings, font, s_row, screenWidth, screenHeight))
     {
         rebuildRow(settings, font, s_row, screenWidth, screenHeight);
 #if PLATFORM_PS2 && PS2_CACHE_LEGACY_HINT_TEXT
@@ -246,5 +252,7 @@ void LegacyControlTooltipHud::render(Minecraft *mc, int_t screenWidth, int_t scr
 #endif
     }
 
+    for (int_t i = 0; i < PROMPT_COUNT; ++i)
+        if (s_row.icons[i] >= 0) drawControlIcon(mc, s_row.icons[i], s_row.x[i], s_row.y - 2);
     drawRow(font, s_row);
 }

@@ -1,3 +1,4 @@
+#include "net/minecraft/src/ControlIcon.h"
 #include "net/minecraft/src/UiStrings.h"
 #include "GuiSkinSelector.h"
 
@@ -596,13 +597,14 @@ void GuiSkinSelector::drawScreen(int_t mouseX, int_t mouseY, float_t partialTick
     // 7. Footer / Controller Legend
     const int_t footerY = height - 14;
 #if PLATFORM_PS2
-    const std::string hint = uiText("[X] Select Skin   [O] Cancel   [D-Pad] Navigate");
+    const std::string buttons[] = {"Cross", "Circle", "D-Pad"};
 #elif PLATFORM_WII
-    const std::string hint = uiText("[A] Select Skin   [B] Cancel   [D-Pad] Navigate");
+    const std::string buttons[] = {"A", "B", "D-Pad"};
 #else
-    const std::string hint = uiText("[Enter] Select Skin   [Esc] Cancel   [< / >] Navigate");
+    const std::string buttons[] = {"Enter", "Esc", "Left/Right"};
 #endif
-    fontRenderer->drawStringWithShadow(hint, dialogLeft + 4, footerY, 0xF0F0F0);
+    const std::string actions[] = {uiText("Select"), uiText("Cancel"), uiText("Navigate")};
+    drawControlHintRow(mc, width, footerY, buttons, actions, 3);
 
     // 8. Draw standard GUI controls (like the disabled Player 2 button)
     GuiScreen::drawScreen(mouseX, mouseY, partialTick);

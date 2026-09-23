@@ -227,5 +227,5 @@ void LegacyOptionsScreen::drawLegacyBackground(float_t partialTick)
         panelRenderer.draw(legacyLayout);
 
     syncLegacySelection();
-    drawLegacyMenuHints(fontRenderer, width, height, true);
+    drawLegacyMenuHints(mc, width, height, true);
 }

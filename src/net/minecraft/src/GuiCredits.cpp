@@ -49,5 +49,5 @@ void GuiCredits::drawScreen(int_t mouseX, int_t mouseY, float_t partialTick)
     }
     updateLegacyPointerHover(mouseX, mouseY);
     GuiScreen::drawScreen(mouseX, mouseY, partialTick);
-    drawLegacyMenuHints(fontRenderer, width, height, true);
+    drawLegacyMenuHints(mc, width, height, true);
 }

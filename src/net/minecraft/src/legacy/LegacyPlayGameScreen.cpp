@@ -463,7 +463,7 @@ void LegacyPlayGameScreen::drawScrollIndicators()
 
 void LegacyPlayGameScreen::drawMenuControlHints()
 {
-    drawLegacyMenuHints(fontRenderer, width, height, true);
+    drawLegacyMenuHints(mc, width, height, true);
 }
 
 void LegacyPlayGameScreen::drawScreen(int_t mouseX, int_t mouseY, float_t partialTick)
