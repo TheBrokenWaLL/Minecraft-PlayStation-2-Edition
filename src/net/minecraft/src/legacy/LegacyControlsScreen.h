@@ -6,12 +6,13 @@
 #include "LegacyOptionsScreen.h"
 
 class GuiButton;
+class LegacyOptionCheckbox;
 
 class LegacyControlsScreen : public LegacyOptionsScreen
 {
 public:
     LegacyControlsScreen(GuiScreen *parent, GameSettings *settings,
-        LegacyOptionsBackgroundMode backgroundMode = LegacyOptionsBackgroundMode::Panorama);
+        LegacyOptionsBackgroundMode backgroundMode = LegacyOptionsBackgroundMode::Panorama, bool editLayout = false);
 
     void initGui() override;
     void updateScreen() override;
@@ -24,6 +25,9 @@ protected:
     void mouseClicked(int_t x, int_t y, int_t button) override;
 
 private:
+    void drawLayoutArtwork();
+    bool editingLayout;
+    bool artworkAvailable = false;
     void rebuildPage();
     void beginCapture(int_t visibleRow);
     void cancelCapture();
@@ -31,7 +35,9 @@ private:
     void resetDefaults();
     void refreshRowLabels();
     int_t pageCount() const;
+    int_t fixedOptionRows() const;
 
+    LegacyOptionCheckbox *invertControlsCheckbox;
     int_t captureRow;
     int_t page;
     int_t rowsPerPage;
