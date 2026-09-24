@@ -550,11 +550,12 @@ void ps2_gs_state_begin_terrain_pass(bool translucent)
             s_translucentDepthFuncOverridden = true;
         }
         s_depthFunc = kCompareLess;
-        // Use the material/source alpha for translucent terrain. Fog color is
-        // handled per vertex in Ps2Vu0Draw3D; keeping alpha independent of fog
-        // prevents water opacity from changing as the camera moves through it.
-        s_blendFixForced = false;
-        s_blendFixValue = 0x80;
+        // CT16 terrain textures (including PSMT8's CT16 palette) retain only
+        // one alpha bit. Source-alpha blending would make water/ice opaque.
+        // Restore the terrain material opacity independently of GS fog; leave
+        // texture alpha testing and the fog coefficient path unchanged.
+        s_blendFixForced = true;
+        s_blendFixValue = 0x58;
         ps2_gs_state_invalidate_blend_alpha();
         ps2_gs_state_apply_blend();
         return;
