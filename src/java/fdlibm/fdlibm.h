@@ -17,7 +17,7 @@ extern "C" {
 #ifndef __LITTLE_ENDIAN
 /* Sometimes it's necessary to define __LITTLE_ENDIAN explicitly
    but these catch some common cases. */
-#if defined(i386) || defined(i486) || defined(__i386__) || defined(__x86_64__) || \
+#if defined(i386) || defined(i486) || defined(__i386__) || defined(__x86_64__) || defined(_M_IX86) || defined(_M_X64) || defined(_M_AMD64) || \
 	defined(intel) || defined(x86) || defined(i86pc) || \
 	defined(__alpha) || defined(__osf__) || defined(__MIPSEL__) || defined(__MIPSEL) || defined(__mipsel__) || defined(_MIPSEL)
 #define __LITTLE_ENDIAN
@@ -51,7 +51,9 @@ extern "C" {
 
 extern int signgam;
 
+#ifndef MAXFLOAT
 #define	MAXFLOAT	((float)3.40282346638528860e+38)
+#endif
 
 enum fdversion {fdlibm_ieee = -1, fdlibm_svid, fdlibm_xopen, fdlibm_posix};
 
@@ -72,7 +74,12 @@ extern  _LIB_VERSION_TYPE  _LIB_VERSION;
 #define _XOPEN_ fdlibm_xopen
 #define _POSIX_ fdlibm_posix
 
-struct exception {
+/* SVID matherr payload. The tag is deliberately not the historical
+ * "struct exception": Darwin's <math.h> defines a struct by exactly that
+ * name, and fdlibm_support.c must include <math.h> before this header (see
+ * the note there), which made the second definition a hard redefinition
+ * error on macOS. Nothing outside this header refers to the tag. */
+struct fdlibm_exception {
 	int type;
 	char *name;
 	double arg1;
@@ -80,21 +87,27 @@ struct exception {
 	double retval;
 };
 
+#ifndef HUGE
 #define	HUGE		MAXFLOAT
+#endif
 
 /* 
  * set X_TLOSS = pi*2**52, which is possibly defined in <values.h>
  * (one may replace the following line by "#include <values.h>")
  */
 
-#define X_TLOSS		1.41484755040568800000e+16 
+#ifndef X_TLOSS
+#define X_TLOSS		1.41484755040568800000e+16
+#endif
 
+#ifndef DOMAIN
 #define	DOMAIN		1
 #define	SING		2
 #define	OVERFLOW	3
 #define	UNDERFLOW	4
 #define	TLOSS		5
 #define	PLOSS		6
+#endif
 
 /*
  * ANSI/POSIX
@@ -140,9 +153,9 @@ extern double ieee_y0 __P((double));
 extern double ieee_y1 __P((double));
 extern double ieee_yn __P((int, double));
 
-extern double acosh __P((double));
-extern double asinh __P((double));
-extern double atanh __P((double));
+extern double ieee_acosh __P((double));
+extern double ieee_asinh __P((double));
+extern double ieee_atanh __P((double));
 extern double ieee_cbrt __P((double));
 extern double ieee_logb __P((double));
 extern double ieee_nextafter __P((double, double));
@@ -153,7 +166,7 @@ extern double ieee_scalb __P((double, int));
 extern double ieee_scalb __P((double, double));
 #endif
 
-extern int ieee_matherr __P((struct exception *));
+extern int ieee_matherr __P((struct fdlibm_exception *));
 
 /*
  * IEEE Test Vector

@@ -7,6 +7,9 @@
 #include <fstream>
 #endif
 
+#include <sstream>
+#include "platform/Storage.h"
+
 namespace GameResources
 {
 std::string getExeDir() { return PlatformResources::baseDir(); }
@@ -30,6 +33,16 @@ std::unique_ptr<std::istream> openPath(const std::string& resolvedPath)
 
 std::unique_ptr<std::istream> open(const std::string& mcPath)
 {
+    if (mcPath.find(':') != std::string::npos || mcPath.rfind("./", 0) == 0 || PlatformStorage::exists(mcPath))
+    {
+        std::vector<unsigned char> fileBytes;
+        if (PlatformStorage::readFile(mcPath, fileBytes) && !fileBytes.empty())
+        {
+            std::string s(reinterpret_cast<const char*>(fileBytes.data()), fileBytes.size());
+            return std::make_unique<std::istringstream>(s, std::ios::binary);
+        }
+    }
+
     std::string resolved = resolve(mcPath);
 #ifdef PS2_PLATFORM
     if (resolved.empty())

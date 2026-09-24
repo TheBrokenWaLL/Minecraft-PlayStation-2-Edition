@@ -52,6 +52,8 @@ static std::string normalizedTexturePath(const std::string &name)
 		path.erase(0, 6);
 	else if (path.rfind("##", 0) == 0)
 		path.erase(0, 2);
+	if (path.find(':') != std::string::npos || path.rfind("./", 0) == 0)
+		return path;
 	if (!path.empty() && path[0] != '/')
 		path.insert(path.begin(), '/');
 	return path;
@@ -367,6 +369,67 @@ bool RenderEngine::loadTextureStreamInto(const std::string &s, int_t texture, st
 
 		const std::string normalizedPath = normalizedTexturePath(s);
 		image = legacyPreparePanoramaForUpload(normalizedPath, std::move(image));
+
+		// Minecraft 1.2.5 player/biped models use 64x32 texture format.
+		// If a modern 64x64 skin texture is loaded, automatically convert it to 64x32
+		// with second-layer overlay compositing and opaque base regions to prevent
+		// texture stretching/distortion on the model.
+		if (image && image->getWidth() == 64 && image->getHeight() == 64)
+		{
+			std::string lowerPath = normalizedPath;
+			for (char &c : lowerPath)
+				c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+			if (lowerPath.find("skin") != std::string::npos ||
+			    lowerPath.find("char") != std::string::npos ||
+			    lowerPath.find("player") != std::string::npos ||
+			    lowerPath.find("/mob/") != std::string::npos)
+			{
+				std::vector<unsigned char> srcRgba(BufferedImage::checkedRgbaByteCount(64, 64));
+				image->getRGB(0, 0, 64, 64, srcRgba.data());
+				std::vector<unsigned char> dstRgba(BufferedImage::checkedRgbaByteCount(64, 32), 0);
+				std::memcpy(dstRgba.data(), srcRgba.data(), 64 * 32 * 4);
+
+				// Alpha composite 64x64 2nd-layer overlays:
+				auto blendRect = [&](int sx, int sy, int rw, int rh, int dx, int dy) {
+					for (int y = 0; y < rh; ++y)
+					{
+						int srcY = sy + y;
+						int dstY = dy + y;
+						for (int x = 0; x < rw; ++x)
+						{
+							int srcX = sx + x;
+							int dstX = dx + x;
+							const unsigned char *sp = &srcRgba[(srcY * 64 + srcX) * 4];
+							unsigned char *dp = &dstRgba[(dstY * 64 + dstX) * 4];
+							float a = sp[3] / 255.0f;
+							if (a > 0.01f)
+							{
+								dp[0] = static_cast<unsigned char>(sp[0] * a + dp[0] * (1.0f - a));
+								dp[1] = static_cast<unsigned char>(sp[1] * a + dp[1] * (1.0f - a));
+								dp[2] = static_cast<unsigned char>(sp[2] * a + dp[2] * (1.0f - a));
+								dp[3] = 255;
+							}
+						}
+					}
+				};
+
+				blendRect(16, 32, 24, 16, 16, 16); // Torso overlay
+				blendRect(40, 32, 16, 16, 40, 16); // Right Arm overlay
+				blendRect(0, 32, 16, 16, 0, 16);   // Right Leg overlay
+
+				// Make base skin regions opaque (head, torso, limbs)
+				for (int y = 0; y < 16; ++y)
+					for (int x = 0; x < 32; ++x)
+						dstRgba[(x + y * 64) * 4 + 3] = 255;
+				for (int y = 16; y < 32; ++y)
+					for (int x = 0; x < 64; ++x)
+						dstRgba[(x + y * 64) * 4 + 3] = 255;
+
+				auto retro = std::make_unique<BufferedImage>(64, 32);
+				retro->setRGB(0, 0, 64, 32, dstRgba.data());
+				image = std::move(retro);
+			}
+		}
 #ifdef WII_PLATFORM
 		// Bring-up diagnostic. getTexture swallows every failure into
 		// missingTextureImage via the catch below, so a texture that silently
@@ -419,6 +482,8 @@ bool RenderEngine::loadTextureStreamInto(const std::string &s, int_t texture, st
 bool RenderEngine::shouldLoadTextureAsync(const std::string &s) const
 {
 #if PLATFORM_PS2
+	if (s.find(':') != std::string::npos || s.rfind("./", 0) == 0)
+		return false;
 	if (!backgroundTextureLoadingEnabled || Ps2Assets::source() != Ps2Assets::Source::UsbMass)
 		return false;
 

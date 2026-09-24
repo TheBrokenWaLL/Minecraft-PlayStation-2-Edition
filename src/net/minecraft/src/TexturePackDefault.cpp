@@ -12,6 +12,7 @@
 
 #ifdef PS2_PLATFORM
 #include "java/Resource.h"
+#include <sstream>
 #endif
 
 TexturePackDefault::TexturePackDefault() :
@@ -59,15 +60,24 @@ void TexturePackDefault::bindThumbnailTexture(Minecraft *minecraft)
 
 std::istream* TexturePackDefault::getResourceAsStream(const std::string &s)
 {
+	if (s.find(':') != std::string::npos || s.rfind("./", 0) == 0)
+	{
+		auto st = GameResources::open(s);
+		if (st)
+			return st.release();
+	}
 #ifdef PS2_PLATFORM
 	try
 	{
-		return Resource::getResource(s);
+		std::istream *stream = Resource::getResource(s);
+		if (stream != nullptr)
+			return stream;
 	}
 	catch (...)
 	{
-		return nullptr;
 	}
+
+	return nullptr;
 #else
 	return GameResources::open(s).release();
 #endif

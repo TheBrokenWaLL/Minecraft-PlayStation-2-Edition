@@ -26,8 +26,9 @@ ControlIcon controlIconTexture(Minecraft *mc, const std::string &label)
 #else
     constexpr const char *path = "/gui/buttons_wii.png";
     static constexpr Entry entries[] = {
-        {"1", 0}, {"2", 1}, {"Home", 2}, {"B", 3},
-        {"D-Pad", 4}, {"L", 5}, {"Z", 6}, {"Nun-Z", 6}, {"-", 7}, {"+", 8}
+        {"1", 0}, {"2", 1}, {"A", 2}, {"B", 3},
+        {"D-Pad", 4}, {"L", 5}, {"R", 6}, {"-", 7},
+        {"+", 8}, {"Z", 9}, {"Nun-Z", 9}
     };
 #endif
     int_t cell = -1;
@@ -72,7 +73,7 @@ ControlIcon controlIconTexture(Minecraft *mc, const std::string &label)
     {
         std::string path(prefix);
         // Punctuation-only button names otherwise collide at "_".
-        const std::string iconLabel = label == "+" ? "plus" : label == "-" ? "minus" : label;
+        const std::string iconLabel = label == "+" ? "plus" : label == "-" ? "minus" : label == "Enter" ? "return" : label;
         for (unsigned char c : iconLabel)
         {
             if (c >= 'A' && c <= 'Z') c += 'a' - 'A';
@@ -122,23 +123,37 @@ void drawControlHintRow(Minecraft *mc, int_t width, int_t y,
 {
     if (!mc || !mc->fontRenderer || count < 1 || count > 4) return;
     FontRenderer *font = mc->fontRenderer;
-    ControlIcon icons[4];
+    ControlIcon icons[4], secondIcons[4];
+    int_t iconWidths[4] = {};
     int_t widths[4], total = 0;
     std::string texts[4];
     const int_t cellLimit = std::max<int_t>(1, (width - 16 - (count - 1) * 6) / count);
     for (int_t i = 0; i < count; ++i)
     {
         icons[i] = controlIconTexture(mc, buttons[i]);
+        const auto separator = buttons[i].find('/');
+        if (icons[i].texture < 0 && separator != std::string::npos)
+        {
+            const auto first = controlIconTexture(mc, buttons[i].substr(0, separator));
+            const auto second = controlIconTexture(mc, buttons[i].substr(separator + 1));
+            if (first.texture >= 0 && second.texture >= 0)
+            {
+                icons[i] = first;
+                secondIcons[i] = second;
+            }
+        }
+        iconWidths[i] = icons[i].texture >= 0 ? (secondIcons[i].texture >= 0 ? 30 : 15) : 0;
         texts[i] = font->trimStringToWidth(icons[i].texture >= 0 ? actions[i] :
-            "[" + buttons[i] + "] " + actions[i], std::max<int_t>(1, cellLimit - (icons[i].texture >= 0 ? 15 : 0)));
-        widths[i] = font->getStringWidth(texts[i]) + (icons[i].texture >= 0 ? 15 : 0);
+            "[" + buttons[i] + "] " + actions[i], std::max<int_t>(1, cellLimit - iconWidths[i]));
+        widths[i] = font->getStringWidth(texts[i]) + iconWidths[i];
         total += widths[i];
     }
     int_t x = std::max<int_t>(8, (width - total - (count - 1) * 6) / 2);
     for (int_t i = 0; i < count; ++i)
     {
         if (icons[i].texture >= 0) drawControlIcon(mc, icons[i], x, y - 2);
-        font->drawStringWithShadow(texts[i], x + (icons[i].texture >= 0 ? 15 : 0), y, 0xf0f0f0);
+        if (secondIcons[i].texture >= 0) drawControlIcon(mc, secondIcons[i], x + 15, y - 2);
+        font->drawStringWithShadow(texts[i], x + iconWidths[i], y, 0xf0f0f0);
         x += widths[i] + 6;
     }
 }

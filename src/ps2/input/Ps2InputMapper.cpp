@@ -238,8 +238,8 @@ void updateMenu(const Ps2PadSnapshot& primary, bool specializedMenuNavigation) {
     }
     if (!specializedMenuNavigation)
     {
-        if (p.pressed & (PAD_CIRCLE | PAD_TRIANGLE)) lwjgl::Keyboard::detail::pushKey(lwjgl::Keyboard::KEY_ESCAPE, true);
-        if (p.released & (PAD_CIRCLE | PAD_TRIANGLE)) lwjgl::Keyboard::detail::pushKey(lwjgl::Keyboard::KEY_ESCAPE, false);
+        if (p.pressed & PAD_CIRCLE) lwjgl::Keyboard::detail::pushKey(lwjgl::Keyboard::KEY_ESCAPE, true);
+        if (p.released & PAD_CIRCLE) lwjgl::Keyboard::detail::pushKey(lwjgl::Keyboard::KEY_ESCAPE, false);
         if (p.pressed & PAD_START) lwjgl::Keyboard::detail::pushKey(lwjgl::Keyboard::KEY_RETURN, true);
         if (p.released & PAD_START) lwjgl::Keyboard::detail::pushKey(lwjgl::Keyboard::KEY_RETURN, false);
     }

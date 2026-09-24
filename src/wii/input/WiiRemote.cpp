@@ -182,7 +182,10 @@ void poll(WiiPadInternal::FrameState& state)
 	state.setMouse(VM_ATTACK,    lwjgl::Mouse::isGrabbed()
 		? (!thirdPersonChordHeld && (held & wmButtons.attack) != 0)
 		: (held & WPAD_BUTTON_A) != 0);
-	state.setMouse(VM_USE,       !thirdPersonChordHeld && (held & wmButtons.use) != 0);
+	// En GUI, el clic secundario (soltar 1 ítem / dividir stack) es siempre el gatillo B físico
+	state.setMouse(VM_USE,       lwjgl::Mouse::isGrabbed()
+		? (!thirdPersonChordHeld && (held & wmButtons.use) != 0)
+		: (held & WPAD_BUTTON_B) != 0);
 
 	if (held & WPAD_BUTTON_A)      state.textInputHeld |= WII_TEXT_TYPE;
 	if (held & WPAD_BUTTON_B)      state.textInputHeld |= WII_TEXT_BACK;
@@ -231,9 +234,10 @@ void poll(WiiPadInternal::FrameState& state)
 	{
 		g_classicMenuStickWasActive = false;
 		const u32 padButtons = WPAD_BUTTON_UP | WPAD_BUTTON_DOWN | WPAD_BUTTON_LEFT |
-			WPAD_BUTTON_RIGHT | WPAD_BUTTON_PLUS | WPAD_BUTTON_MINUS | WPAD_BUTTON_B |
+			WPAD_BUTTON_RIGHT | WPAD_BUTTON_PLUS | WPAD_BUTTON_MINUS |
 			WPAD_BUTTON_1 | WPAD_BUTTON_2;
-		if ((down & padButtons) != 0 || ((down & WPAD_BUTTON_A) != 0 && !irValid))
+		// A y B son los dos gatillos del puntero; solo cuentan como pad si el sensor IR no es visible
+		if ((down & padButtons) != 0 || (((down & (WPAD_BUTTON_A | WPAD_BUTTON_B)) != 0) && !irValid))
 			state.menuPadActivity = true;
 	}
 
@@ -401,8 +405,9 @@ void poll(WiiPadInternal::FrameState& state)
 		debug.irMag = WiiPointer::handleIr(ix, iy, !state.inMenu && !state.alternativeControls);
 		if (expType != WPAD_EXP_CLASSIC)
 		{
+			// Tanto el clic primario (A) como el secundario (B) pertenecen al puntero
 			state.menuPointerActivity = WiiPointer::menuPointerActivity() ||
-				(state.inMenu && (down & WPAD_BUTTON_A) != 0);
+				(state.inMenu && (down & (WPAD_BUTTON_A | WPAD_BUTTON_B)) != 0);
 		}
 	}
 	else

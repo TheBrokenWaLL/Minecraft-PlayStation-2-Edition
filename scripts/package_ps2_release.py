@@ -227,7 +227,32 @@ def main():
             for p in pack_list:
                 f.write(p + "\n")
         log(f"Copiados {len(pack_list)} paquetes .ochpack y generado packlist.txt en -> Version ELF/OptiCraftHeritage/mods/")
-    
+
+    # 4.1.3 Copiar skins (.png) a Version ELF/OptiCraftHeritage/skins/
+    skins_src_dir = None
+    for cand_skins in [
+        os.path.join(repo_dir, "resources", "skins"),
+        os.path.join(repo_dir, "bin", "ps2", "usb", "MCBETA", "skins"),
+        os.path.join(repo_dir, "skins"),
+        r"C:\Users\user\Documents\OptiCraft\skins",
+        r"C:\Users\user\Downloads\skins",
+        os.path.join(r"C:\Users\user\OptiCraftHeritageEdition-PR2", "resources", "skins"),
+        os.path.join(r"C:\Users\user\OptiCraftHeritageEdition-PR", "bin", "ps2", "usb", "MCBETA", "skins"),
+    ]:
+        if os.path.isdir(cand_skins) and any(f.lower().endswith(".png") for f in os.listdir(cand_skins)):
+            skins_src_dir = cand_skins
+            break
+
+    if skins_src_dir:
+        dest_skins_dir = os.path.join(opti_heritage_dir, "skins")
+        os.makedirs(dest_skins_dir, exist_ok=True)
+        skin_count = 0
+        for skin_file in os.listdir(skins_src_dir):
+            if skin_file.lower().endswith(".png"):
+                shutil.copy2(os.path.join(skins_src_dir, skin_file), os.path.join(dest_skins_dir, skin_file))
+                skin_count += 1
+        log(f"Copiadas {skin_count} skins de {skins_src_dir} -> Version ELF/OptiCraftHeritage/skins/")
+
     # 4.2 Archivos auxiliares de Version ELF
     copy_txt = os.path.join(ref_release, "Version ELF", "!!COPY!!.txt")
     if os.path.isfile(copy_txt):

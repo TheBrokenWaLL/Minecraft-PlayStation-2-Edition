@@ -1,0 +1,16 @@
+# Config for actionlint (https://github.com/rhysd/actionlint). Not wired into
+# CI (this repo has no lint job); it keeps local `actionlint` runs clean.
+paths:
+  ".github/workflows/**/*.{yml,yaml}":
+    ignore:
+      # actionlint v1.7.12's bundled runner-label list predates GitHub's
+      # ubuntu-26.04 GA (2026-09-17, see github.blog/changelog and
+      # actions/runner-images README, which lists the label).
+      - 'label "ubuntu-26.04" is unknown'
+      # Same for ubuntu-26.04-arm: public preview since 2026-06-11 (github.blog
+      # changelog "New runner images in public preview"), listed in GitHub's
+      # GitHub-hosted runners reference docs.
+      - 'label "ubuntu-26.04-arm" is unknown'
+      # actionlint's bundled spec for msys2/setup-msys2@v2 predates this
+      # input, which is documented in the action's README.
+      - 'input "suppress-deprecation-warnings" is not defined'

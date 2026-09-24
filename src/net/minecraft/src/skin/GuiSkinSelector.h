@@ -2,6 +2,7 @@
 
 #include "platform/PlatformConfig.h"
 #include "net/minecraft/src/GuiScreen.h"
+#include "SkinManager.h"
 #include <string>
 
 class GuiButton;
@@ -21,22 +22,25 @@ public:
     bool doesGuiPauseGame() override;
 
 protected:
-    bool usesSpecializedMenuNavigation() const override { return true; }
-    bool suppressesPlatformPointerInput() const override { return true; }
+    bool allowsPlatformPointerInput() const override { return true; }
     void handleSpecializedMenuInput() override;
 
 private:
     void nextSkin();
     void prevSkin();
+    void switchPack(int newPackIndex);
     void selectAndConfirm();
     void cancelAndReturn();
+    void deleteCurrentCustomSkin();
 
     void drawBeveledPanel(int_t left, int_t top, int_t right, int_t bottom, int_t fillColor);
     void drawInsetPanel(int_t left, int_t top, int_t right, int_t bottom, int_t fillColor);
-    void drawFrontPreview(const std::string &path, float x, float y, float w, float h, float alpha);
+    void drawFrontPreview(const SkinEntry *skin, float x, float y, float w, float h, float alpha);
     void drawFeetShadow(float centerX, float groundY, float radiusX, float radiusY, float alpha);
 
     GuiScreen *parentScreen;
+    bool initializedSelection;
+    int currentPackIndex;
     int currentSkinIndex;
     float scrollOffset; // smooth transition offset: -1.0 (moving right) to +1.0 (moving left), dampens to 0.0
 
@@ -53,13 +57,18 @@ private:
     int_t nameplateY;
     int_t nameplateHeight;
 
-    // Disabled Player 2 button
+    // Interactive GUI buttons
+    GuiButton *buttonTabDefault;
+    GuiButton *buttonTabCustom;
     GuiButton *buttonPlayer2Skin;
+    GuiButton *buttonLoadSkins;
+    GuiButton *buttonDeleteSkin;
 
 #if PLATFORM_PS2
     bool ps2ActionReleaseLatch;
     bool stickNavLatched;
     int dpadRepeatTimer;
     int stickRepeatTimer;
+    unsigned short lastPadHeld;
 #endif
 };

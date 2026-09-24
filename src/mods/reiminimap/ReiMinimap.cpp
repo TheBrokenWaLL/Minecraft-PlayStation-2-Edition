@@ -229,14 +229,30 @@ void ReiMinimap::updateMapTexture()
     int_t playerZ = static_cast<int_t>(std::floor(m_mc->thePlayer->posZ));
     World *world = m_mc->theWorld;
 
+    // Caché local para evitar miles de llamadas redundantes a getChunkFromBlockCoords
+    Chunk *cachedChunk = nullptr;
+    int_t cachedChunkX = 0x7FFFFFFF;
+    int_t cachedChunkZ = 0x7FFFFFFF;
+
     for (int_t dy = 0; dy < MAP_RES; ++dy)
     {
         int_t wz = playerZ + (dy - MAP_RES / 2);
+        int_t chunkZ = wz >> 4;
+
         for (int_t dx = 0; dx < MAP_RES; ++dx)
         {
             int_t wx = playerX + (dx - MAP_RES / 2);
-            Chunk *chunk = world->getChunkFromBlockCoords(wx, wz);
+            int_t chunkX = wx >> 4;
 
+            // Solo consulta el mundo si cambiamos de frontera de chunk (máximo ~25 consultas en vez de 4.096)
+            if (cachedChunk == nullptr || chunkX != cachedChunkX || chunkZ != cachedChunkZ)
+            {
+                cachedChunk = world->getChunkFromBlockCoords(wx, wz);
+                cachedChunkX = chunkX;
+                cachedChunkZ = chunkZ;
+            }
+
+            Chunk *chunk = cachedChunk;
             int_t r = 24, g = 24, b = 24, a = 255;
 
             if (chunk != nullptr && !chunk->isEmpty())
@@ -261,7 +277,8 @@ void ReiMinimap::updateMapTexture()
                     y--;
                 }
 
-                int_t northHeight = world->getHeightValue(wx, wz - 1);
+                // Si wz - 1 pertenece al mismo chunk (el 93.75% de las veces), lee directamente sin consultar al world
+                int_t northHeight = (lz > 0) ? chunk->getHeightValue(lx, lz - 1) : world->getHeightValue(wx, wz - 1);
                 int_t col = getBlockColor(blockId, y, northHeight);
 
                 r = col & 0xFF;
@@ -480,4 +497,4 @@ void ReiMinimap::saveWaypoints()
         content += wp.name + ":" + std::to_string(wp.x) + ":" + std::to_string(wp.y) + ":" + std::to_string(wp.z) + ":" + std::to_string(wp.color) + ":" + (wp.enabled ? "1" : "0") + "\n";
     }
     PlatformStorage::writeFile(path, content.data(), content.size());
-}
+};

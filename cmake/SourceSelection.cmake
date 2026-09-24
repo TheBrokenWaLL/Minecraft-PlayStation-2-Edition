@@ -101,3 +101,19 @@ function(mcbeta_select_platform_backends list_var platform render_backend sound_
         "[/\\\\]platform[/\\\\]TextureResidencyPolicy_(PC|WII|PS2)\\.cpp$")
     set(${list_var} "${${list_var}}" PARENT_SCOPE)
 endfunction()
+
+# CI-injected aliases for the opticraft_* calls in CMakeLists.txt
+function(opticraft_collect_platform_sources out_var platform_dir)
+  mcbeta_collect_platform_sources(${out_var} ${platform_dir})
+  set(${out_var} ${${out_var}} PARENT_SCOPE)
+endfunction()
+
+function(opticraft_exclude_sources list_var)
+  mcbeta_exclude_sources(${list_var} ${ARGN})
+  set(${list_var} ${${list_var}} PARENT_SCOPE)
+endfunction()
+
+function(opticraft_select_platform_backends list_var platform render_backend sound_backend)
+  mcbeta_select_platform_backends(${list_var} ${platform} ${render_backend} ${sound_backend})
+  set(${list_var} ${${list_var}} PARENT_SCOPE)
+endfunction()

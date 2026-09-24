@@ -61,17 +61,28 @@ void ContainerPlayer::onCraftMatrixChanged(IInventory *iinventory)
 	craftResult->setInventorySlotContents(0, newResult);
 }
 
-void ContainerPlayer::onCraftGuiClosed(EntityPlayer *entityplayer)
+void ContainerPlayer::onCraftGuiClosed(EntityPlayer *par1EntityPlayer)
 {
-	Container::onCraftGuiClosed(entityplayer);
-	for(int_t i = 0; i < 4; i++)
-	{
-		ItemStack *itemstack = craftMatrix->getStackInSlotOnClosing(i);
-		if(itemstack != nullptr)
-		{
-			entityplayer->dropPlayerItem(itemstack);
-		}
-	}
+    Container::onCraftGuiClosed(par1EntityPlayer);
+
+    for (int_t i = 0; i < 4; ++i)
+    {
+        ItemStack *itemstack = craftMatrix->getStackInSlotOnClosing(i);
+
+        if (itemstack != nullptr)
+        {
+            par1EntityPlayer->dropPlayerItem(itemstack);
+        }
+    }
+
+    // FIX (Issue #18): Vaciar el slot del ítem crafteado para evitar duplicación
+     ItemStack *oldResult = craftResult->getStackInSlot(0);
+ craftResult->setInventorySlotContents(0, nullptr);
+ if (oldResult != nullptr)
+ {
+     delete oldResult;
+}
+
 }
 
 bool ContainerPlayer::isUsableByPlayer(EntityPlayer *entityplayer)

@@ -82,7 +82,9 @@ void TexturePackList::updateAvailableTexturePacks()
 			if (lowerName.size() < 4 || lowerName.compare(lowerName.size() - 4, 4, ".zip") != 0) continue;
 
 			auto file = entry.path();
-			std::string s = filename + ":" + std::to_string(fs::file_size(file)) + ":" + std::to_string(fs::last_write_time(file).time_since_epoch().count());
+			// libc++ represents file_time_type with rep __int128 and has not std::to_string for him (ambiguous call).
+			const auto mtime = static_cast<long long>(fs::last_write_time(file).time_since_epoch().count());
+			std::string s = filename + ":" + std::to_string(fs::file_size(file)) + ":" + std::to_string(mtime);
 
 			try
 			{

@@ -151,7 +151,7 @@ private:
         }
 
     private:
-        static const std::uint32_t kWindowBytes = 16u * 1024u;
+        enum { kWindowBytes = 16u * 1024u };
         PakArchive::Entry entry_;
         std::uint32_t windowStart_;
         char window_[kWindowBytes];

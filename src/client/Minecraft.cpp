@@ -1398,10 +1398,16 @@ void Minecraft::clickMouse(int_t i)
             }
             if (itemstack1 == nullptr)
                 return;
-            if (itemstack1->stackSize == 0)
-                thePlayer->inventory->mainInventory[thePlayer->inventory->currentItem] = nullptr;
-            else if (itemstack1->stackSize != j1 || playerController->isInCreativeMode())
-                entityRenderer->getItemRenderer()->resetEquippedProgressAfterBlockPlace();
+          if (itemstack1->stackSize == 0)
+{
+    delete itemstack1;
+    thePlayer->inventory->mainInventory[thePlayer->inventory->currentItem] = nullptr;
+}
+else if (itemstack1->stackSize != j1 || playerController->isInCreativeMode())
+{
+    entityRenderer->getItemRenderer()->resetEquippedProgressAfterBlockPlace();
+}
+
         }
     }
 

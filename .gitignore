@@ -356,12 +356,15 @@ vendor/glfw-3.3.2.bin.WIN64/
 
 # ia shit
 .claude/
+.agents/
 
 # all the shit plans made with ia (i hate vibecoding)
 CLAUDE.MD
 AGENT.MD
+AGENTS.MD
 CODESTYLE.MD
 ROADMAP.MD
+skills-lock.json
 
 # builder
 build-wii.bat
@@ -386,7 +389,11 @@ data/
 docs/
 mcbeta.zip
 ninja.exe
-/assets/
+# Keep the folder in fresh clones; ignore everything else in it
+/assets/*
+!/assets/.gitkeep
+# Pinned SDL_net clone — never tracked (adding it as a gitlink broke git)
+/external/SDL_net/
 !src/ps2/storage/assets/
 extracted_assets/
 extracted_assets_vanilla/

@@ -7,6 +7,7 @@
 #include "lwjgl/Keyboard.h"
 
 #include <algorithm>
+#include <cstdio>
 #include "EnumOptions.h"
 #include "EnumOptionsMappingHelper.h"
 #include "KeyBinding.h"
@@ -513,7 +514,7 @@ void GameSettings::setOptionValue(const EnumOptions *enumoptions, int_t i)
 		}
 		else
 		{
-			guiScale = guiScale + i & 3;
+			guiScale = (guiScale + i) & 3;
 			legacyGuiScaleRestore = legacyUiClampGuiScale(guiScale);
 		}
 	}
@@ -554,7 +555,7 @@ void GameSettings::setOptionValue(const EnumOptions *enumoptions, int_t i)
 	if (enumoptions == EnumOptions::FRAMERATE_LIMIT)
 		limitFramerate = (limitFramerate + i + 3) % 3;
 	if (enumoptions == EnumOptions::DIFFICULTY)
-		difficulty = difficulty + i & 3;
+		difficulty = (difficulty + i) & 3;
 	if (enumoptions == EnumOptions::GRAPHICS)
 	{
 		fancyGraphics = !fancyGraphics;
@@ -957,7 +958,11 @@ std::string GameSettings::getKeyBinding(const EnumOptions *enumoptions)
 	if (enumoptions == EnumOptions::FOG_FANCY)
 		return s + (ofFogOff ? uiText("OFF") : (ofFogFancy ? uiText("Fancy") : uiText("Fast")));
 	if (enumoptions == EnumOptions::FOG_START)
-		return s + std::to_string(ofFogStart);
+	{
+		char fogBuf[16];
+		std::snprintf(fogBuf, sizeof(fogBuf), "%.1f", ofFogStart);
+		return s + fogBuf;
+	}
 	if (enumoptions == EnumOptions::LOAD_FAR)
 		return s + (ofLoadFar ? uiText("ON") : uiText("OFF"));
 	if (enumoptions == EnumOptions::PRELOADED_CHUNKS)
