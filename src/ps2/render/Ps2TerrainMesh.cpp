@@ -304,7 +304,8 @@ Ps2TerrainMeshBuildStepResult Ps2TerrainMesh::beginBuild(const int_t* raw,
 {
     didWork = false;
     cancelBuild();
-    m_storage.clear();
+    // Retain initialized bytes: stream packers overwrite every live vertex.
+    // m_valid and the offsets, not vector size, control published geometry.
     m_runs.clear();
     m_positionOffset = 0;
     m_texCoordOffset = 0;
@@ -332,7 +333,10 @@ Ps2TerrainMeshBuildStepResult Ps2TerrainMesh::beginBuild(const int_t* raw,
             std::vector<unsigned char>().swap(m_storage);
             m_storage.reserve(totalBytes);
         }
-        m_storage.resize(totalBytes);
+        // Grow only the initialized high-water mark; do not zero old storage
+        // again when rebuilding a mesh that fits. Capacity policy is unchanged.
+        if (totalBytes > m_storage.size())
+            m_storage.resize(totalBytes);
 
         const std::uintptr_t storageBase = reinterpret_cast<std::uintptr_t>(m_storage.data());
         std::uintptr_t cursor = alignUp(storageBase, kStreamAlignment);
@@ -461,7 +465,8 @@ void Ps2TerrainMesh::swap(Ps2TerrainMesh& other)
 void Ps2TerrainMesh::clearKeepCapacity()
 {
     cancelBuild();
-    m_storage.clear();
+    // Retain initialized bytes: stream packers overwrite every live vertex.
+    // m_valid and the offsets, not vector size, control published geometry.
     m_runs.clear();
     m_positionOffset = 0;
     m_texCoordOffset = 0;
