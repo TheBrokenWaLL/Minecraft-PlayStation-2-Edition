@@ -6,11 +6,51 @@
 #include "platform/PlatformConfig.h"
 #include "platform/RenderAPI.h"
 #include <algorithm>
+#if !PLATFORM_PS2 && !PLATFORM_WII
 #include <map>
+#endif
 
-int_t controlIconTexture(Minecraft *mc, const std::string &label)
+ControlIcon controlIconTexture(Minecraft *mc, const std::string &label)
 {
-    if (!mc || !mc->renderEngine || !mc->fontRenderer || label.empty()) return -1;
+    if (!mc || !mc->renderEngine || !mc->fontRenderer || label.empty()) return {};
+#if PLATFORM_PS2 || PLATFORM_WII
+    struct Entry { const char *label; int_t cell; };
+#if PLATFORM_PS2
+    constexpr const char *path = "/gui/buttons_ps2.png";
+    static constexpr Entry entries[] = {
+        {"Cross", 0}, {"X", 0}, {"Circle", 1}, {"O", 1},
+        {"Square", 2}, {"Triangle", 3}, {"D-Pad", 4},
+        {"L1", 5}, {"R1", 6}, {"L2", 7}, {"R2", 8},
+        {"L3", 9}, {"R3", 10}, {"Select", 11}, {"Start", 12}
+    };
+#else
+    constexpr const char *path = "/gui/buttons_wii.png";
+    static constexpr Entry entries[] = {
+        {"1", 0}, {"2", 1}, {"Home", 2}, {"B", 3},
+        {"D-Pad", 4}, {"L", 5}, {"Z", 6}, {"Nun-Z", 6}, {"-", 7}, {"+", 8}
+    };
+#endif
+    int_t cell = -1;
+    for (const Entry &entry : entries)
+        if (label == entry.label) { cell = entry.cell; break; }
+    if (cell < 0) return {};
+    static RenderEngine *owner = nullptr;
+    static unsigned revision = 0;
+    static bool exists = false;
+    const unsigned current = mc->fontRenderer->getTextCacheRevision();
+    if (owner != mc->renderEngine || revision != current)
+    {
+        owner = mc->renderEngine; revision = current;
+        exists = owner->hasResource(path);
+    }
+    if (!exists) return {};
+    // RenderEngine owns and caches the texture, including pack reloads.
+    const int_t texture = owner->getTexture(path);
+    int_t w = 0, h = 0;
+    if (texture < 0 || !owner->getTextureDimensions(texture, &w, &h) ||
+        w <= 0 || w != h || w % 4 != 0) return {};
+    return {texture, cell};
+#else
     static RenderEngine *owner = nullptr;
     static unsigned revision = 0;
     struct Resource { std::string path; bool exists; };
@@ -43,25 +83,37 @@ int_t controlIconTexture(Minecraft *mc, const std::string &label)
         const bool exists = owner->hasResource(path);
         it = available.emplace(label, Resource{path, exists}).first;
     }
-    if (!it->second.exists) return -1;
+    if (!it->second.exists) return {};
     const int_t id = owner->getTexture(it->second.path);
     int_t w = 0, h = 0;
-    return id >= 0 && owner->getTextureDimensions(id, &w, &h) && w > 0 && h > 0 ? id : -1;
+    return {id >= 0 && owner->getTextureDimensions(id, &w, &h) && w > 0 && h > 0 ? id : -1, 0};
+#endif
 }
 
-void drawControlIcon(Minecraft *mc, int_t texture, int_t x, int_t y)
+void drawControlIcon(Minecraft *mc, ControlIcon icon, int_t x, int_t y)
 {
-    mc->renderEngine->bindTexture(texture);
+    if (!mc || !mc->renderEngine || icon.texture < 0) return;
+    float u0 = 0, v0 = 0, u1 = 1, v1 = 1;
+#if PLATFORM_PS2 || PLATFORM_WII
+    int_t w = 0, h = 0;
+    if (!mc->renderEngine->getTextureDimensions(icon.texture, &w, &h) || w <= 0 || h <= 0) return;
+    // Sample inside the cell edges so filtering cannot bleed into its neighbors.
+    u0 = (icon.cell % 4) * 0.25f + 0.5f / w;
+    v0 = (icon.cell / 4) * 0.25f + 0.5f / h;
+    u1 = (icon.cell % 4 + 1) * 0.25f - 0.5f / w;
+    v1 = (icon.cell / 4 + 1) * 0.25f - 0.5f / h;
+#endif
+    mc->renderEngine->bindTexture(icon.texture);
     renderEnable(RenderCapability::Texture2D);
     renderEnable(RenderCapability::Blend);
     renderBlendFunc(RenderBlendFactor::SrcAlpha, RenderBlendFactor::OneMinusSrcAlpha);
     renderColor4f(1, 1, 1, 1);
     Tessellator &t = Tessellator::instance;
     t.startDrawingQuads();
-    t.addVertexWithUV(x, y + 12, 0, 0, 1);
-    t.addVertexWithUV(x + 12, y + 12, 0, 1, 1);
-    t.addVertexWithUV(x + 12, y, 0, 1, 0);
-    t.addVertexWithUV(x, y, 0, 0, 0);
+    t.addVertexWithUV(x, y + 12, 0, u0, v1);
+    t.addVertexWithUV(x + 12, y + 12, 0, u1, v1);
+    t.addVertexWithUV(x + 12, y, 0, u1, v0);
+    t.addVertexWithUV(x, y, 0, u0, v0);
     t.draw();
 }
 
@@ -70,22 +122,23 @@ void drawControlHintRow(Minecraft *mc, int_t width, int_t y,
 {
     if (!mc || !mc->fontRenderer || count < 1 || count > 4) return;
     FontRenderer *font = mc->fontRenderer;
-    int_t icons[4], widths[4], total = 0;
+    ControlIcon icons[4];
+    int_t widths[4], total = 0;
     std::string texts[4];
     const int_t cellLimit = std::max<int_t>(1, (width - 16 - (count - 1) * 6) / count);
     for (int_t i = 0; i < count; ++i)
     {
         icons[i] = controlIconTexture(mc, buttons[i]);
-        texts[i] = font->trimStringToWidth(icons[i] >= 0 ? actions[i] :
-            "[" + buttons[i] + "] " + actions[i], std::max<int_t>(1, cellLimit - (icons[i] >= 0 ? 15 : 0)));
-        widths[i] = font->getStringWidth(texts[i]) + (icons[i] >= 0 ? 15 : 0);
+        texts[i] = font->trimStringToWidth(icons[i].texture >= 0 ? actions[i] :
+            "[" + buttons[i] + "] " + actions[i], std::max<int_t>(1, cellLimit - (icons[i].texture >= 0 ? 15 : 0)));
+        widths[i] = font->getStringWidth(texts[i]) + (icons[i].texture >= 0 ? 15 : 0);
         total += widths[i];
     }
     int_t x = std::max<int_t>(8, (width - total - (count - 1) * 6) / 2);
     for (int_t i = 0; i < count; ++i)
     {
-        if (icons[i] >= 0) drawControlIcon(mc, icons[i], x, y - 2);
-        font->drawStringWithShadow(texts[i], x + (icons[i] >= 0 ? 15 : 0), y, 0xf0f0f0);
+        if (icons[i].texture >= 0) drawControlIcon(mc, icons[i], x, y - 2);
+        font->drawStringWithShadow(texts[i], x + (icons[i].texture >= 0 ? 15 : 0), y, 0xf0f0f0);
         x += widths[i] + 6;
     }
 }

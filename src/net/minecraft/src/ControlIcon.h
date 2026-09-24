@@ -4,10 +4,16 @@
 class Minecraft;
 class FontRenderer;
 
-// Optional pack resources: /gui/controls/{ps2,wii,keyboard}/<label>.png.
-// Labels are lower-case ASCII; punctuation/spaces become underscores.
-int_t controlIconTexture(Minecraft *mc, const std::string &label);
-void drawControlIcon(Minecraft *mc, int_t texture, int_t x, int_t y);
+// Console icons share a 4x4 atlas; desktop icons retain individual textures.
+struct ControlIcon
+{
+    int_t texture = -1;
+    int_t cell = 0;
+    bool operator!=(const ControlIcon &other) const
+    { return texture != other.texture || cell != other.cell; }
+};
+ControlIcon controlIconTexture(Minecraft *mc, const std::string &label);
+void drawControlIcon(Minecraft *mc, ControlIcon icon, int_t x, int_t y);
 void drawControlHintRow(Minecraft *mc, int_t width, int_t y,
     const std::string *buttons, const std::string *actions, int_t count);
 
