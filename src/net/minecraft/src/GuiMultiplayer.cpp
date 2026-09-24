@@ -195,9 +195,6 @@ void GuiMultiplayer::saveServerList()
         }
         else
         {
-            // PS2 Memory Card storage has no reliable rename operation. Its
-            // native whole-file writer flushes through libmc and is the same
-            // persistence path used by options.txt and level.dat.
             saved = PlatformStorage::writeFile(destination, payload.data(), payload.size());
         }
 
@@ -697,23 +694,49 @@ void GuiMultiplayer::pollServer(const std::shared_ptr<ServerNBTStorage> &server)
     if (server == nullptr)
         return;
 
+    auto markOffline = [&server]() {
+        std::lock_guard<std::mutex> guard(server->stateMutex);
+        server->lag = -1;
+        server->motd = "\xC2\xA7" "4Can't reach server";
+        server->playerCount = "\xC2\xA7" "8???";
+    };
+
     std::string host;
     int_t port = 25565;
     splitServerAddress(server->host, host, port);
+
     std::unique_ptr<JavaNetwork::Socket> socket = JavaNetwork::createSocket();
     if (socket == nullptr || !socket->connect(host, port))
-        throw std::runtime_error("Can't reach server");
+    {
+        markOffline();
+        return;
+    }
 
     std::unique_ptr<std::istream> input = JavaNetwork::createInputStream(*socket);
     const char ping = (char)254;
     if (!socket->write(&ping, 1))
-        throw std::runtime_error("Failed to send server ping");
+    {
+        markOffline();
+        return;
+    }
 
     const int packetId = input->get();
     if (packetId != 255)
-        throw std::runtime_error("Bad server ping response");
+    {
+        markOffline();
+        return;
+    }
 
-    std::string response = Packet::readString(*input, 256);
+    std::string response;
+    try
+    {
+        response = Packet::readString(*input, 256);
+    }
+    catch (...)
+    {
+        markOffline();
+        return;
+    }
     socket->close();
 
     std::vector<jstring> fields;

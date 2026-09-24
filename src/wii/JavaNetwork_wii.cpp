@@ -3,10 +3,12 @@
 #ifdef WII_PLATFORM
 
 #include <atomic>
+#include <cerrno>
 #include <cstring>
 #include <istream>
 #include <ostream>
 #include <streambuf>
+#include <sys/time.h>
 
 #include <network.h>
 
@@ -26,32 +28,84 @@ public:
 	{
 		releaseSocket();
 		closing.store(false, std::memory_order_release);
+		readInterrupted.store(false, std::memory_order_release);
 		receivedBytes.store(0, std::memory_order_release);
 		sentBytes.store(0, std::memory_order_release);
 		remoteAddress = host + ":" + std::to_string(port);
 		if (port < 1 || port > 65535 || !WiiNetwork::initialize())
 			return false;
 
-		hostent *resolved = net_gethostbyname(host.c_str());
-		if (resolved == nullptr || resolved->h_addr_list == nullptr || resolved->h_addr_list[0] == nullptr)
-			return false;
+		// 1. Configuración de sockaddr_in compatible con BSD/libogc en Wii
+		sockaddr_in target;
+		std::memset(&target, 0, sizeof(target));
+		target.sin_len = sizeof(target); // OBLIGATORIO en Wii: sin_len evita ECONNREFUSED en IOS
+		target.sin_family = AF_INET;
+		target.sin_port = htons(static_cast<u16>(port));
+
+		// 2. Comprobar primero si es una IP directa (evita freeze de 30s de net_gethostbyname)
+		struct in_addr directAddr;
+		if (inet_aton(host.c_str(), &directAddr))
+		{
+			target.sin_addr = directAddr;
+		}
+		else
+		{
+			hostent *resolved = net_gethostbyname(host.c_str());
+			if (resolved == nullptr || resolved->h_addr_list == nullptr || resolved->h_addr_list[0] == nullptr)
+				return false;
+			std::memcpy(&target.sin_addr, resolved->h_addr_list[0], sizeof(target.sin_addr));
+		}
 
 		const s32 socketFd = net_socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
 		if (socketFd < 0)
 			return false;
 		fd.store(socketFd, std::memory_order_release);
 
-		sockaddr_in target;
-		std::memset(&target, 0, sizeof(target));
-		target.sin_family = AF_INET;
-		target.sin_port = htons(static_cast<u16>(port));
-		std::memcpy(&target.sin_addr, resolved->h_addr_list[0], sizeof(target.sin_addr));
+		// 3. Conexión no bloqueante con timeout estricto de 4 segundos
+		u32 nonBlock = 1;
+		net_ioctl(socketFd, FIONBIO, &nonBlock);
 
-		if (net_connect(socketFd, reinterpret_cast<sockaddr *>(&target), sizeof(target)) < 0)
+		s32 ret = net_connect(socketFd, reinterpret_cast<sockaddr *>(&target), sizeof(target));
+		if (ret < 0)
 		{
-			close();
-			return false;
+			// En libogc los errores de socket se retornan directamente como enteros negativos
+			if (ret == -EINPROGRESS || ret == -EALREADY || errno == EINPROGRESS)
+			{
+				fd_set writeSet, errSet;
+				struct timeval tv;
+				tv.tv_sec = 4; // Timeout máximo de 4 segundos para evitar congelar la consola
+				tv.tv_usec = 0;
+
+				FD_ZERO(&writeSet);
+				FD_ZERO(&errSet);
+				FD_SET(socketFd, &writeSet);
+				FD_SET(socketFd, &errSet);
+
+				const s32 sel = net_select(socketFd + 1, nullptr, &writeSet, &errSet, &tv);
+				if (sel <= 0 || FD_ISSET(socketFd, &errSet))
+				{
+					close();
+					return false;
+				}
+
+				int soError = 0;
+				u32 optLen = sizeof(soError);
+				if (net_getsockopt(socketFd, SOL_SOCKET, SO_ERROR, &soError, &optLen) < 0 || soError != 0)
+				{
+					close();
+					return false;
+				}
+			}
+			else if (ret != -EISCONN)
+			{
+				close();
+				return false;
+			}
 		}
+
+		// Restaurar a modo bloqueante para operaciones de datos normales
+		nonBlock = 0;
+		net_ioctl(socketFd, FIONBIO, &nonBlock);
 		return true;
 	}
 
@@ -61,10 +115,37 @@ public:
 		if (socketFd < 0 || buffer == nullptr || length <= 0 ||
 		    closing.load(std::memory_order_acquire))
 			return -1;
-		const s32 count = net_recv(socketFd, buffer, length, 0);
-		if (count > 0)
-			receivedBytes.fetch_add(static_cast<std::size_t>(count), std::memory_order_relaxed);
-		return static_cast<int>(count);
+
+		// 4. Lectura controlada por net_select para responder a interrupciones sin colgar el hilo
+		while (!closing.load(std::memory_order_acquire) &&
+		       !readInterrupted.load(std::memory_order_acquire))
+		{
+			fd_set readSet;
+			struct timeval tv;
+			tv.tv_sec = 0;
+			tv.tv_usec = 100000; // Slices de 100 ms
+
+			FD_ZERO(&readSet);
+			FD_SET(socketFd, &readSet);
+
+			const s32 ready = net_select(socketFd + 1, &readSet, nullptr, nullptr, &tv);
+			if (ready < 0)
+				return -1;
+			if (ready == 0)
+				continue; // Timeout de 100 ms cumplido, verifica flags de cierre y reitera
+
+			if (FD_ISSET(socketFd, &readSet))
+			{
+				const s32 count = net_recv(socketFd, buffer, length, 0);
+				if (count > 0)
+				{
+					receivedBytes.fetch_add(static_cast<std::size_t>(count), std::memory_order_relaxed);
+					return static_cast<int>(count);
+				}
+				return -1; // Conexión cerrada o error de lectura
+			}
+		}
+		return -1;
 	}
 
 	bool write(const char *buffer, int length) override
@@ -94,17 +175,19 @@ public:
 
 	void interruptRead() override
 	{
-		const s32 socketFd = fd.load(std::memory_order_acquire);
-		if (socketFd >= 0)
-			net_shutdown(socketFd, 0);
+		readInterrupted.store(true, std::memory_order_release);
 	}
 
 	void close() override
 	{
 		closing.store(true, std::memory_order_release);
-		const s32 socketFd = fd.load(std::memory_order_acquire);
+		readInterrupted.store(true, std::memory_order_release);
+		const s32 socketFd = fd.exchange(-1, std::memory_order_acq_rel);
 		if (socketFd >= 0)
+		{
 			net_shutdown(socketFd, 2);
+			net_close(socketFd);
+		}
 	}
 
 	std::string getRemoteSocketAddress() const override { return remoteAddress; }
@@ -115,6 +198,7 @@ private:
 	void releaseSocket()
 	{
 		closing.store(true, std::memory_order_release);
+		readInterrupted.store(true, std::memory_order_release);
 		const s32 socketFd = fd.exchange(-1, std::memory_order_acq_rel);
 		if (socketFd >= 0)
 		{
@@ -125,6 +209,7 @@ private:
 
 	std::atomic<s32> fd{-1};
 	std::atomic_bool closing{true};
+	std::atomic_bool readInterrupted{false};
 	std::atomic<std::size_t> receivedBytes{0};
 	std::atomic<std::size_t> sentBytes{0};
 	std::string remoteAddress;
@@ -242,8 +327,8 @@ std::unique_ptr<Socket> createSocket() { return std::make_unique<WiiSocket>(); }
 std::unique_ptr<std::istream> createInputStream(Socket &socket) { return std::make_unique<SocketInputStream>(socket); }
 std::unique_ptr<std::ostream> createOutputStream(Socket &socket) { return std::make_unique<SocketOutputStream>(socket); }
 
-// Multiplayer only needs the TCP socket API. HTTPS resource/auth downloads are
-// deliberately left disabled until the Wii has a TLS backend.
+
+
 bool readUrl(const std::string &, std::vector<unsigned char> &) { return false; }
 int getResponseCode(const std::string &) { return -1; }
 bool postUrl(const std::string &, const std::string &, const std::string &,

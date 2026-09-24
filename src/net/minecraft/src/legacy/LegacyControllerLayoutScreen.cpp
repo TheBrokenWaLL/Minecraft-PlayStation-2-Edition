@@ -211,8 +211,7 @@ void LegacyControllerLayoutScreen::initGui()
     };
 
     // Keep the layout screen focused on the actions that have a physical PS2
-    // controller mapping. Other keyboard-oriented actions remain available in
-    // the regular Controls list.
+    // controller mapping. Analog movement and camera axes remain unchanged.
     appendBinding(settings->keyBindUseItem);
     appendBinding(settings->keyBindForward);
     appendBinding(settings->keyBindLeft);
@@ -750,7 +749,8 @@ void LegacyControllerLayoutScreen::drawScreen(int_t mouseX, int_t mouseY, float_
     const int_t controllerTop = std::max<int_t>(legacyLayout.panelY + 36,
         std::min<int_t>(legacyLayout.panelY + 46, footerTop - CONTROLLER_HEIGHT - 4));
     drawControllerImage(centerX, controllerTop);
-    drawControllerConnectors(centerX, controllerTop);
+    if (controllerImageAvailable)
+        drawControllerConnectors(centerX, controllerTop);
 
     updatePointerHover(mouseX, mouseY);
     GuiScreen::drawScreen(mouseX, mouseY, partialTick);

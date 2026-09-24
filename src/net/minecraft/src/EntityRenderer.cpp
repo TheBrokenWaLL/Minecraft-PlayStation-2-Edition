@@ -464,7 +464,7 @@ void EntityRenderer::updateLightmap()
         green = std::min(1.0f, green);
         blue = std::min(1.0f, blue);
 
-        #if PLATFORM_PS2
+#if PLATFORM_PS2
         if (mc->gameSettings != nullptr && mc->gameSettings->legacyLook)
             legacyLookRgb(red, green, blue);
 #endif
@@ -696,10 +696,14 @@ float EntityRenderer::getFOVModifier(float partialTicks, bool applyFovModifiers)
     // OptiFine 1.2.5 HD C6 (lr.java): hold the configured zoom binding,
     // enable smooth camera while zoomed, and restore fresh filters on release.
     bool zoomActive = false;
-    if (mc->gameSettings->ofKeyBindZoom->keyCode < 0)
-        zoomActive = lwjgl::Mouse::isButtonDown(mc->gameSettings->ofKeyBindZoom->keyCode + 100);
-    else
-        zoomActive = lwjgl::Keyboard::isKeyDown(mc->gameSettings->ofKeyBindZoom->keyCode);
+    // [FIX CRÍTICO WII] Verificación defensiva contra nullptr en ofKeyBindZoom para evitar DSI Exception / Segfault si no está instanciado.
+    if (mc->gameSettings->ofKeyBindZoom != nullptr)
+    {
+        if (mc->gameSettings->ofKeyBindZoom->keyCode < 0)
+            zoomActive = lwjgl::Mouse::isButtonDown(mc->gameSettings->ofKeyBindZoom->keyCode + 100);
+        else
+            zoomActive = lwjgl::Keyboard::isKeyDown(mc->gameSettings->ofKeyBindZoom->keyCode);
+    }
 
     if (zoomActive)
     {
@@ -964,6 +968,8 @@ void EntityRenderer::orientCamera(float partialTicks)
 void EntityRenderer::setupCameraTransform(float partialTicks, int anaglyphPass)
 {
     farPlaneDistance = static_cast<float>(Config::getRenderDistanceFine());
+    // [WII 16:9] ConsoleAspectRatio calcula la relación de aspecto anamórfica exacta según mc->gameSettings->widescreen
+    // para proyectar el mundo cúbico sin estiramiento horizontal en televisores 16:9 con señal EFB 640x480.
 #if PLATFORM_FLOAT_VERTEX_MATH
     const float projectionAspect = static_cast<float>(ConsoleAspectRatio::getProjectionAspect(
         mc->displayWidth, mc->displayHeight, mc->gameSettings->widescreen));
@@ -998,7 +1004,7 @@ void EntityRenderer::setupCameraTransform(float partialTicks, int anaglyphPass)
                       PLATFORM_NEAR_PLANE, farPlaneDistance * 2.0f);
     }
     
-    if (mc->playerController->func_35643_e())
+    if (mc->playerController != nullptr && mc->playerController->func_35643_e())
         renderScale(1.0f, 2.0f / 3.0f, 1.0f);
 
     renderMatrixMode(RenderMatrixMode::ModelView);
@@ -1051,6 +1057,8 @@ void EntityRenderer::renderHand(float partialTicks, int anaglyphPass)
     if (debugViewDirection > 0)
         return;
 
+    // [WII 16:9] Utiliza projectionAspect idéntico al de la cámara del mundo para que la mano
+    // en primera persona no sufra ensanchamiento visual en modo panorámico.
 #if PLATFORM_FLOAT_VERTEX_MATH
     const float projectionAspect = static_cast<float>(ConsoleAspectRatio::getProjectionAspect(
         mc->displayWidth, mc->displayHeight, mc->gameSettings->widescreen));
@@ -1078,7 +1086,7 @@ void EntityRenderer::renderHand(float partialTicks, int anaglyphPass)
                   projectionAspect,
                   PLATFORM_NEAR_PLANE, farPlaneDistance * 2.0f);
 
-    if (mc->playerController->func_35643_e())
+    if (mc->playerController != nullptr && mc->playerController->func_35643_e())
         renderScale(1.0f, 2.0f / 3.0f, 1.0f);
 
     renderMatrixMode(RenderMatrixMode::ModelView);
@@ -1100,7 +1108,7 @@ void EntityRenderer::renderHand(float partialTicks, int anaglyphPass)
     if (mc->gameSettings->thirdPersonView == 0 &&
         !mc->renderViewEntity->isPlayerSleeping() &&
         !mc->gameSettings->hideGUI &&
-        !mc->playerController->func_35643_e())
+        (mc->playerController == nullptr || !mc->playerController->func_35643_e()))
     {
         enableLightmap(partialTicks);
         itemRenderer->renderItemInFirstPerson(partialTicks);
@@ -1210,7 +1218,7 @@ void EntityRenderer::updateCameraAndRender(float partialTicks)
     }
     
     // Manejo de camara/mouse
-    if (mc->inGameHasFocus)
+    if (mc->inGameHasFocus && mc->thePlayer != nullptr)
     {
 #if PLATFORM_DIRECT_ANALOG_MOVEMENT
 #if PLATFORM_DIRECT_CAMERA_ENABLED
@@ -1309,6 +1317,9 @@ void EntityRenderer::updateCameraAndRender(float partialTicks)
     {
         fpsLimitChar = '(';  // ~40 fps
     }
+    // [FIX CRÍTICO WII] Prevenir división por cero si fpsLimitChar es '\0' (0).
+    // Si limitFramerate es 0 (ilimitado) o tiene un valor anómalo, establecemos 120L para evitar congelamiento fatal en PowerPC.
+    const long limitFps = (fpsLimitChar > '\0') ? static_cast<long>(fpsLimitChar) : 120L;
     
     if (mc->theWorld != nullptr)
     {
@@ -1322,7 +1333,7 @@ void EntityRenderer::updateCameraAndRender(float partialTicks)
         else
         {
             // 0x3b9aca00 = 1000000000 nanosegundos
-            int64_t targetTime = field_28133_I + (int64_t)(1000000000LL / (long)fpsLimitChar);
+            int64_t targetTime = field_28133_I + (int64_t)(1000000000LL / limitFps);
             renderWorld(partialTicks, targetTime);
         }
 
@@ -1334,7 +1345,7 @@ void EntityRenderer::updateCameraAndRender(float partialTicks)
         
         if (mc->gameSettings->limitFramerate == 2)
         {
-            int64_t sleepTime = (field_28133_I + (int64_t)(1000000000LL / (long)fpsLimitChar) - 
+            int64_t sleepTime = (field_28133_I + (int64_t)(1000000000LL / limitFps) - 
                                 std::chrono::duration_cast<std::chrono::nanoseconds>(
                                     std::chrono::steady_clock::now().time_since_epoch()).count()) / 1000000LL;
             
@@ -1379,7 +1390,7 @@ void EntityRenderer::updateCameraAndRender(float partialTicks)
         
         if (mc->gameSettings->limitFramerate == 2)
         {
-            int64_t sleepTime = (field_28133_I + (int64_t)(1000000000LL / (long)fpsLimitChar) - 
+            int64_t sleepTime = (field_28133_I + (int64_t)(1000000000LL / limitFps) - 
                                 std::chrono::duration_cast<std::chrono::nanoseconds>(
                                     std::chrono::steady_clock::now().time_since_epoch()).count()) / 1000000LL;
             
@@ -2381,7 +2392,7 @@ void EntityRenderer::updateFogColor(float partialTicks)
         fogColorBlue = static_cast<float>(fogColorBlue * voidFog);
     }
 
-    #if PLATFORM_PS2
+#if PLATFORM_PS2
     if (mc->gameSettings != nullptr && mc->gameSettings->legacyLook)
         legacyLookRgb(fogColorRed, fogColorGreen, fogColorBlue);
 #endif

@@ -20,6 +20,7 @@
 #include "lwjgl/Display.h"
 
 #include <gccore.h>
+#include <ogc/conf.h>
 
 #include "wii/gx_wii.h"
 #include "wii/input/WiiInput.h"
@@ -42,11 +43,16 @@ void create()
 {
 	if (g_created) return;
 
+	// [FIX WII / ISSUE #9] Consultar la configuración de aspecto de la consola en lugar de
+	// depender únicamente de una macro estática #ifdef WII_WIDESCREEN. Si la consola está en 16:9,
+	// se pasa widescreen = true a wiigl_init().
+	CONF_Init();
 #ifdef WII_WIDESCREEN
-	wiigl_init(true);
+	const bool widescreen = true;
 #else
-	wiigl_init(false);
+	const bool widescreen = (CONF_GetAspectRatio() == CONF_ASPECT_16_9);
 #endif
+	wiigl_init(widescreen);
 
 	WiiInput::initialize(wiigl_width(), wiigl_height());
 	WiiSystemEvents::install();

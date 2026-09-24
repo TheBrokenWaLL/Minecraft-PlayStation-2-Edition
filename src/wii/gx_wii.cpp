@@ -97,8 +97,8 @@ void waitPendingFrame()
 
 } // namespace
 
-int wiigl_width()  { return g_rmode ? g_rmode->fbWidth   : 640; }
-int wiigl_height() { return g_rmode ? g_rmode->efbHeight : 480; }
+// [NOTA] wiigl_width() y wiigl_height() ahora están definidas como inline en wii/gx_wii.h
+// para garantizar que cualquier unidad de traducción las resuelva directamente sin fallos de enlace.
 
 void wiigl_flush_cache(const void *data, unsigned int bytes)
 {
@@ -118,6 +118,27 @@ void wiigl_init(bool widescreen)
 	// MEM1 purely so the diagnostic console could exist.
 	g_rmode  = wiiGetRenderMode();
 	g_xfb[0] = wiiGetEarlyFramebuffer();
+
+	// [FIX WII / ISSUE #9] Sincronizar el ancho de línea del Video Interface (VI)
+	// según la bandera panorámica recibida, garantizando que llene la pantalla
+	// 16:9 sin barras negras verticales (viWidth = 678).
+	if (g_rmode != nullptr)
+	{
+		if (g_widescreen)
+		{
+			g_rmode->viWidth = 678;
+			const u32 maxWidth = (g_rmode->viTVMode >> 2) == VI_PAL ? VI_MAX_WIDTH_PAL : VI_MAX_WIDTH_NTSC;
+			g_rmode->viXOrigin = (maxWidth - 678) / 2;
+		}
+		else
+		{
+			g_rmode->viWidth = 640;
+			const u32 maxWidth = (g_rmode->viTVMode >> 2) == VI_PAL ? VI_MAX_WIDTH_PAL : VI_MAX_WIDTH_NTSC;
+			g_rmode->viXOrigin = (maxWidth - 640) / 2;
+		}
+		VIDEO_Configure(g_rmode);
+		VIDEO_Flush();
+	}
 
 	// Two external framebuffers so the VI can scan one while GX copies into the
 	// other; flipping between them is what makes the image tear-free.
@@ -232,6 +253,35 @@ void wiigl_init(bool widescreen)
 	// caller onwards the console and the renderer share buffer 0, and the unified Wii log sink has
 	// to stop drawing into it. Every other channel keeps working.
 	wiiPlatformLogEndBootPhase();
+}
+
+// [FIX WII / ISSUE #9] Permite alternar la relación de aspecto panorámica en caliente
+// reconfigurando dinámicamente los registros del Video Interface (VI) de la Wii sin reiniciar la consola.
+void wiigl_set_widescreen(bool widescreen)
+{
+	g_widescreen = widescreen;
+	if (g_initialised && g_rmode != nullptr)
+	{
+		if (g_widescreen)
+		{
+			g_rmode->viWidth = 678;
+			const u32 maxWidth = (g_rmode->viTVMode >> 2) == VI_PAL ? VI_MAX_WIDTH_PAL : VI_MAX_WIDTH_NTSC;
+			g_rmode->viXOrigin = (maxWidth - 678) / 2;
+		}
+		else
+		{
+			g_rmode->viWidth = 640;
+			const u32 maxWidth = (g_rmode->viTVMode >> 2) == VI_PAL ? VI_MAX_WIDTH_PAL : VI_MAX_WIDTH_NTSC;
+			g_rmode->viXOrigin = (maxWidth - 640) / 2;
+		}
+		VIDEO_Configure(g_rmode);
+		VIDEO_Flush();
+	}
+}
+
+bool wiigl_is_widescreen()
+{
+	return g_widescreen;
 }
 
 void wiigl_begin_frame()

@@ -7,9 +7,25 @@
 #pragma once
 #ifdef WII_PLATFORM
 
+#include "wii/WiiEarlyInit.h"
+
 void wiigl_init(bool widescreen);
-int  wiigl_width();
-int  wiigl_height();
+
+// [FIX LINKER / ISSUE #9 & CI] Definiciones inline para wiigl_width() y wiigl_height().
+// Al definirse inline en el encabezado consultando wiiGetRenderMode(), cualquier unidad de
+// traducción (WiiNativeState.cpp, ClientPlatformPolicy_WII.cpp, Display_wii.cpp) genera
+// el código directamente sin depender de la resolución de símbolos externos del enlazador.
+inline int wiigl_width()
+{
+	GXRModeObj *rmode = wiiGetRenderMode();
+	return rmode ? rmode->fbWidth : 640;
+}
+
+inline int wiigl_height()
+{
+	GXRModeObj *rmode = wiiGetRenderMode();
+	return rmode ? rmode->efbHeight : 480;
+}
 
 void wiigl_begin_frame();
 // Mark whether the current frame should use the native GX display-copy gamma approximation.
@@ -19,6 +35,10 @@ void wiigl_set_legacy_gamma_enabled(bool enabled);
 // and is safe to call before wiigl_init().
 void wiigl_set_deflicker_enabled(bool enabled);
 bool wiigl_deflicker_enabled();
+
+// [FIX WII / ISSUE #9] Soporte para alternar y consultar la relación de aspecto 16:9 / 4:3 en tiempo de ejecución.
+void wiigl_set_widescreen(bool widescreen);
+bool wiigl_is_widescreen();
 
 // Close the frame on the GP side without waiting for it: queue the EFB->XFB
 // copy and a draw-done token, then return. Whatever the caller does next runs
