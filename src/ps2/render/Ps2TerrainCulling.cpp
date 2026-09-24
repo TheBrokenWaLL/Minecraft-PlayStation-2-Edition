@@ -268,6 +268,15 @@ void ps2_terrain_classify_clusters(const Ps2MeshCluster* clusters,
             visibility[cluster] = clusters[cluster].valid() ? 1 : 0;
         }
 
+        // Rejected clusters cannot be submitted by either terrain path.
+        // Keep a conservative risk value without testing more clip planes;
+        // visibility and guard risk are recomputed together on the next call.
+        if (visibility[cluster] == 0)
+        {
+            guardRisk[cluster] = PS2_CLUSTER_GUARD_NEAR | PS2_CLUSTER_GUARD_SIDE;
+            continue;
+        }
+
         if (nativePathUsable && context != nullptr && context->guardBandValid)
         {
             guardRisk[cluster] = ps2_terrain_classify_cluster_guard_risk(

@@ -32,6 +32,10 @@ void ps2_terrain_begin(unsigned int textureId, Ps2TerrainPass pass)
     // makes terrain setup robust against an early-returning caller and ensures
     // the texture/state work below always starts on Path3.
     ps2_render_release_path1();
+#ifdef PS2_RENDER_STATS
+    if (pass == PS2_TERRAIN_PASS_OPAQUE)
+        ++runtime.clusterStats.opaquePasses;
+#endif
     s_currentPass = pass;
     ps2_native_begin_terrain_pass(textureId, nativePass(pass));
     ps2_vu1_terrain_begin_pass();

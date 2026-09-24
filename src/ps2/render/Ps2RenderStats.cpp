@@ -34,6 +34,20 @@ extern "C" void ps2_dbg_draw_dump()
 
     Ps2TerrainClusterStats clusterStats;
     ps2_terrain_take_cluster_stats(clusterStats);
+    // Packed opaque command path only. Times exclude validation, native
+    // context preparation, target selection, stats gathering and submission.
+    // Counts/totals cover the reporting interval, not a single frame.
+    const double passCycles = 294912.0 *
+        (clusterStats.opaquePasses > 0 ? clusterStats.opaquePasses : 1);
+    MC_LOG_DEBUG("render", "[PS2] terrain CPU: passes=%ld sections=%ld clusters=%ld rejected=%ld"
+           " classifyMs/pass=%.3f buildMs/pass=%.3f"
+           " classifyMaxSectionMs=%.3f buildMaxSectionMs=%.3f\n",
+           clusterStats.opaquePasses, clusterStats.commandSections,
+           clusterStats.testedClusters, clusterStats.rejectedClusters,
+           (double)clusterStats.classificationCycles / passCycles,
+           (double)clusterStats.commandBuildCycles / passCycles,
+           (double)clusterStats.classificationMaxCycles / 294912.0,
+           (double)clusterStats.commandBuildMaxCycles / 294912.0);
     MC_LOG_DEBUG("render", "[PS2] terrain clusters: sections=%ld inside=%ld partial=%ld outside=%ld"
            " culledVerts=%ld guardSafePartial=%ld/%ld guardRisk=%ld/%ld"
            " vu1Eligible=%ld sideClip=%ld vu0Risk=%ld/%ld/%ld unavailable=%ld policy=%ld"

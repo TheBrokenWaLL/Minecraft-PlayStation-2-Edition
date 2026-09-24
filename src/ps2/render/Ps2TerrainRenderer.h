@@ -63,6 +63,16 @@ struct Ps2TerrainDrawResult
 
 struct Ps2TerrainClusterStats
 {
+#ifdef PS2_RENDER_STATS
+    unsigned long long classificationCycles;
+    unsigned long long commandBuildCycles;
+    unsigned int classificationMaxCycles;
+    unsigned int commandBuildMaxCycles;
+    long commandSections;
+    long opaquePasses;
+    long testedClusters;
+    long rejectedClusters;
+#endif
     long sections;
     long insideClusters;
     long partialClusters;

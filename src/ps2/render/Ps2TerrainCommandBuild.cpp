@@ -22,6 +22,15 @@
 
 namespace
 {
+#ifdef PS2_RENDER_STATS
+unsigned int commandProfileClock()
+{
+    unsigned int cycles;
+    __asm__ __volatile__("mfc0 %0, $9" : "=r"(cycles) : : "memory");
+    return cycles;
+}
+#endif
+
 constexpr int kMaxVu1Slices = 8;
 constexpr int kMaxVu0Slices = 32;
 
@@ -555,6 +564,9 @@ bool ps2_terrain_build_section_commands(int sectionIndex)
 
     int clusterClass[PS2_MESH_CLUSTER_COUNT];
     int clusterGuardRisk[PS2_MESH_CLUSTER_COUNT];
+#ifdef PS2_RENDER_STATS
+    const unsigned int classificationStart = commandProfileClock();
+#endif
     Ps2TerrainCullingContext cullingContext = {};
     ps2_terrain_build_culling_context(cullingContext, queued.commandContext.mvp,
                                       queued.frame.native.viewW,
@@ -562,6 +574,17 @@ bool ps2_terrain_build_section_commands(int sectionIndex)
     ps2_terrain_classify_clusters(section.faceGroups->clusters,
                                   section.fullyInside, true, &cullingContext,
                                   clusterClass, clusterGuardRisk);
+#ifdef PS2_RENDER_STATS
+    const unsigned int classificationElapsed = commandProfileClock() - classificationStart;
+    runtime.clusterStats.classificationCycles += classificationElapsed;
+    runtime.clusterStats.classificationMaxCycles = std::max(
+        runtime.clusterStats.classificationMaxCycles, classificationElapsed);
+    ++runtime.clusterStats.commandSections;
+    runtime.clusterStats.testedClusters += PS2_MESH_CLUSTER_COUNT;
+    for (int cluster = 0; cluster < PS2_MESH_CLUSTER_COUNT; ++cluster)
+        if (clusterClass[cluster] == 0)
+            ++runtime.clusterStats.rejectedClusters;
+#endif
     const bool directVu1Usable = PS2_DIRECT_VU1_TERRAIN &&
         ps2_vu1_terrain_pass_ready();
     bool clusterClipSafe[PS2_MESH_CLUSTER_COUNT];
@@ -581,6 +604,9 @@ bool ps2_terrain_build_section_commands(int sectionIndex)
     for (int group = 0; group < PS2_FACE_GROUP_COUNT; ++group)
         faceVisibility[group] = faceVisible(section, group);
 
+#ifdef PS2_RENDER_STATS
+    const unsigned int commandStart = commandProfileClock();
+#endif
     if (directVu1Usable)
     {
         buildVu1Commands(runtime.commands, queued, sectionIndex,
@@ -591,6 +617,12 @@ bool ps2_terrain_build_section_commands(int sectionIndex)
     buildVu0Commands(runtime.commands, queued, sectionIndex,
                      clusterTarget, clusterClipSafe, faceVisibility);
 
+#ifdef PS2_RENDER_STATS
+    const unsigned int commandElapsed = commandProfileClock() - commandStart;
+    runtime.clusterStats.commandBuildCycles += commandElapsed;
+    runtime.clusterStats.commandBuildMaxCycles = std::max(
+        runtime.clusterStats.commandBuildMaxCycles, commandElapsed);
+#endif
     queued.commandReady = true;
     return true;
 }
