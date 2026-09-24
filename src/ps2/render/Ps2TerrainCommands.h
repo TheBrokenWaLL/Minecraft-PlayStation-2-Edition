@@ -49,9 +49,7 @@ struct Ps2TerrainCommandBuffer
     std::vector<Ps2TerrainVu1Command> vu1Commands;
     std::vector<Ps2Vu1TerrainSlice> vu1Slices;
     std::vector<Ps2TerrainVu0Command> vu0Commands;
-    std::vector<Ps2TerrainVu0Command> vu0FallbackCommands;
     std::vector<Ps2NativeSlice> vu0Slices;
-    std::vector<Ps2NativeSlice> vu0FallbackSlices;
     std::vector<Ps2TerrainProbeCommand> probeCommands;
 };
 

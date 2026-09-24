@@ -131,9 +131,6 @@ void buildVu0Commands(Ps2TerrainCommandBuffer& commands,
         Ps2NativeSlice normalSlices[kMaxVu0Slices];
         int normalSliceCount = 0;
         int normalVertices = 0;
-        Ps2NativeSlice fallbackSlices[kMaxVu0Slices];
-        int fallbackSliceCount = 0;
-        int fallbackVertices = 0;
 
         auto flushNormal = [&]()
         {
@@ -143,16 +140,6 @@ void buildVu0Commands(Ps2TerrainCommandBuffer& commands,
             normalSliceCount = 0;
             normalVertices = 0;
         };
-        auto flushFallback = [&]()
-        {
-            appendVu0Command(commands.vu0FallbackCommands,
-                             commands.vu0FallbackSlices,
-                             sectionIndex, fallbackSlices, fallbackSliceCount,
-                             fallbackVertices, wantClipSafe);
-            fallbackSliceCount = 0;
-            fallbackVertices = 0;
-        };
-
         auto appendSlice = [&](Ps2NativeSlice* slices,
                                int& sliceCount,
                                int& totalVertices,
@@ -206,9 +193,6 @@ void buildVu0Commands(Ps2TerrainCommandBuffer& commands,
                 continue;
             }
 
-            appendSlice(fallbackSlices, fallbackSliceCount, fallbackVertices,
-                        range.firstVertex, range.vertexCount(), flushFallback);
-
             if (target != PS2_TERRAIN_CLUSTER_VU1)
             {
                 appendSlice(normalSlices, normalSliceCount, normalVertices,
@@ -216,7 +200,6 @@ void buildVu0Commands(Ps2TerrainCommandBuffer& commands,
             }
         }
         flushNormal();
-        flushFallback();
     }
 }
 

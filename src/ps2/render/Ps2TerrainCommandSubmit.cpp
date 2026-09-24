@@ -19,8 +19,7 @@
 namespace
 {
 void submitVu0List(const std::vector<Ps2TerrainVu0Command>& commandList,
-                   const std::vector<Ps2NativeSlice>& sliceStorage,
-                   bool fallbackList)
+                   const std::vector<Ps2NativeSlice>& sliceStorage)
 {
     Ps2TerrainRuntimeState& runtime = ps2_terrain_runtime();
     for (std::size_t i = 0; i < commandList.size(); ++i)
@@ -30,7 +29,7 @@ void submitVu0List(const std::vector<Ps2TerrainVu0Command>& commandList,
             continue;
         Ps2QueuedTerrainSection& queued = runtime.queued[command.sectionIndex];
         if (!queued.commandReady || queued.commandFailed ||
-            queued.forceVu0All != fallbackList)
+            queued.forceVu0All)
         {
             continue;
         }
@@ -118,7 +117,7 @@ void ps2_terrain_submit_vu1_commands()
             continue;
         }
 
-        // RETRY and FATAL both use the prebuilt whole-section VU0 stream.
+        // RETRY and FATAL both request whole-section VU0 replay.
         // A fatal status can mean VU1 accepted a prefix before failing; opaque
         // depth testing makes replaying the complete section safe and matches
         // the legacy two-phase behavior.
@@ -153,9 +152,22 @@ void ps2_terrain_submit_vu0_commands()
 {
     Ps2TerrainRuntimeState& runtime = ps2_terrain_runtime();
     submitVu0List(runtime.commands.vu0Commands,
-                  runtime.commands.vu0Slices, false);
-    submitVu0List(runtime.commands.vu0FallbackCommands,
-                  runtime.commands.vu0FallbackSlices, true);
+                  runtime.commands.vu0Slices);
+
+    // Path1 has been released by terrain_end. Failed VU1 sections skipped
+    // normal VU0 commands above; hand them to its existing whole-section
+    // VU0 replay loop instead of prebuilding an unused fallback every frame.
+    // Invalidate classification because command-ready sections do not fill
+    // the legacy cache, which may still describe an earlier queued section.
+    for (int i = 0; i < runtime.queuedCount; ++i)
+    {
+        Ps2QueuedTerrainSection& queued = runtime.queued[i];
+        if (queued.commandReady && queued.forceVu0All)
+        {
+            queued.classification.valid = false;
+            queued.commandReady = false;
+        }
+    }
     runtime.traceSection = -1;
 }
 

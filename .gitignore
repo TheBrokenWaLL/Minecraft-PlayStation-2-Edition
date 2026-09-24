@@ -401,3 +401,6 @@ extracted_assets_vanilla/
 
 scripts/AUDIO_RECOVERY.md
 scripts/CONTROL_ICON_ASSETS.md
+
+# Local commit patch exports
+/patches/
