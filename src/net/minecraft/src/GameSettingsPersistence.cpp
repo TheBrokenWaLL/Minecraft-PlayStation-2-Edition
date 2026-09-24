@@ -489,7 +489,10 @@ void GameSettings::saveOptions()
 	printwriter << "legacyGuiScaleRestore:" << legacyGuiScaleRestore << "\n";
 	printwriter << "alternativeControllerLayout:" << (alternativeControllerLayout ? "true" : "false") << "\n";
 	printwriter << "controllerDeadzone:" << controllerDeadzone << "\n";
-#ifndef PS2_PLATFORM
+#ifdef PS2_PLATFORM
+	// The compact PS2 writer cannot use the ostream-based platform hook.
+	printwriter << "worldStorage:" << (Ps2SaveStorage::target() == Ps2SaveStorage::Target::MassStorage ? "usb" : "mc") << "\n";
+#else
 	platformGameSettingsWriteOptions(*this, printwriter);
 #endif
 #if PLATFORM_HAS_ASPECT_RATIO_OPTION
