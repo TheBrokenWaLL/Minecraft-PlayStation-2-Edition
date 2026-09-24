@@ -35,36 +35,46 @@ namespace
 	static_assert(PS2_FACE_GROUP_COUNT * PS2_MESH_CLUSTER_COUNT <= 65536,
 		"PS2 retained face/cluster key must fit in unsigned short");
 	static_assert(PLATFORM_MESH_SORT_MAX_QUADS <= 65535,
-		"PS2 per-key quad counts must fit in unsigned short");
+		"PS2 quad indices and radix cursors must fit in unsigned short");
 	static_assert(sizeof(Ps2MeshRange) == 8,
 		"PS2 mesh range metadata must remain compact");
 
 	static_assert(kKeyCount > 0, "PS2 sort key space must be non-empty");
 
-	// Static, not stack: the EE stack is small and this runs from the render
-	// path, single-threaded, once per completed section.
-	//
-	// Why these are keyed by quad and not by sort key
-	// -----------------------------------------------
-	// The key spans kKeyCount = 114688 values with 4x4x4 clustering. A
-	// direct-indexed histogram over that range is 224KB of BSS, and every
-	// completed section paid a 224KB memset plus a 114688-entry prefix-sum walk
-	// -- for a mesh that measures 500-1500 quads. Over 99% of both was spent on
-	// keys no quad in the section used.
-	//
-	// Only the keys that occur matter, and there are at most quadCount of them.
-	// Sorting the per-quad keys makes the distinct set and its run lengths fall
-	// out of a single linear scan, and ascending key order IS tile -> face ->
-	// cluster order by construction (the key is
-	// (tile * groups + face) * clusters + cluster, strictly monotonic in that
-	// lexicographic order), so the emitted layout is identical to the one the
-	// dense histogram produced -- this is a cost change, not a behaviour change.
+	// Single-threaded section finalization: keep bounded scratch off the EE
+	// stack. Stable byte-wise radix sorting preserves source order for equal
+	// tile/face/cluster keys without a dense key-space histogram or per-quad
+	// binary search. At 4096 quads this uses 33280 bytes instead of 40960.
 	unsigned int s_key[PLATFORM_MESH_SORT_MAX_QUADS];
-	// Sorted keys during the scan, then compacted in place to the distinct keys.
-	unsigned int s_distinctKey[PLATFORM_MESH_SORT_MAX_QUADS];
-	// Write cursor of each distinct key, parallel to s_distinctKey. Bounded by
-	// quadCount, which the static_assert above pins under 65536.
-	unsigned short s_distinctBase[PLATFORM_MESH_SORT_MAX_QUADS];
+	unsigned short s_order[2][PLATFORM_MESH_SORT_MAX_QUADS];
+	unsigned short s_cursor[256];
+
+	const unsigned short* sortQuadIndices(int_t quadCount)
+	{
+		unsigned short* input = s_order[0];
+		unsigned short* output = s_order[1];
+		for (unsigned int shift = 0, remaining = kKeyCount - 1;
+		     remaining != 0; shift += 8, remaining >>= 8)
+		{
+			memset(s_cursor, 0, sizeof(s_cursor));
+			for (int_t q = 0; q < quadCount; ++q)
+				++s_cursor[(s_key[input[q]] >> shift) & 255u];
+			unsigned int base = 0;
+			for (int bucket = 0; bucket < 256; ++bucket)
+			{
+				const unsigned int count = s_cursor[bucket];
+				s_cursor[bucket] = (unsigned short)base;
+				base += count;
+			}
+			for (int_t q = 0; q < quadCount; ++q)
+			{
+				const unsigned short source = input[q];
+				output[s_cursor[(s_key[source] >> shift) & 255u]++] = source;
+			}
+			std::swap(input, output);
+		}
+		return input;
+	}
 
 	inline float asFloat(int_t bits)
 	{
@@ -141,7 +151,7 @@ bool ps2_mesh_sort_faces(const int_t *src, int_t *dst, int_t quadCount, Ps2FaceG
 		planeMax[g] = -1e30f;
 	}
 
-	// ---- Pass 1: classify every quad, build the histogram ----
+	// ---- Pass 1: classify every quad ----
 	for (int_t q = 0; q < quadCount; q++)
 	{
 		const int_t *v = src + (size_t)q * kQuadInts;
@@ -243,7 +253,7 @@ bool ps2_mesh_sort_faces(const int_t *src, int_t *dst, int_t quadCount, Ps2FaceG
 		const unsigned int key = (unsigned int)(
 			(tile * PS2_FACE_GROUP_COUNT + bucket) * PS2_MESH_CLUSTER_COUNT + cluster);
 		s_key[q] = key;
-		s_distinctKey[q] = key;
+		s_order[0][q] = (unsigned short)q;
 	}
 
 	for (int g = 0; g < PS2_FACE_GROUP_COUNT; g++)
@@ -255,20 +265,15 @@ bool ps2_mesh_sort_faces(const int_t *src, int_t *dst, int_t quadCount, Ps2FaceG
 		}
 	}
 
-	// ---- Prefix sum over the keys that actually occur ----
-	// Sorting collects equal keys into runs, so one scan yields both the
-	// distinct key set and each run's length. Ascending key order is tile ->
-	// face -> cluster order, which is the order the ranges must be emitted in
-	// and the order the destination buffer must be laid out in.
-	std::sort(s_distinctKey, s_distinctKey + quadCount);
-
-	int distinctCount = 0;
+	// Sort indices, then emit ranges and copy quads in destination order.
+	// Stable ordering is identical to the old source-order scatter.
+	const unsigned short* order = sortQuadIndices(quadCount);
 	int_t running = 0;
 	for (int_t q = 0; q < quadCount; )
 	{
-		const unsigned int key = s_distinctKey[q];
+		const unsigned int key = s_key[order[q]];
 		int_t end = q + 1;
-		while (end < quadCount && s_distinctKey[end] == key)
+		while (end < quadCount && s_key[order[end]] == key)
 			++end;
 		const int_t n = end - q;
 
@@ -283,36 +288,15 @@ bool ps2_mesh_sort_faces(const int_t *src, int_t *dst, int_t quadCount, Ps2FaceG
 			key % (unsigned int)(PS2_FACE_GROUP_COUNT * PS2_MESH_CLUSTER_COUNT));
 		groups.ranges.push_back(range);
 
-		// Compact in place: distinctCount never overtakes q.
-		s_distinctKey[distinctCount] = key;
-		s_distinctBase[distinctCount] = (unsigned short)running;
-		++distinctCount;
 
 		running += n;
 		q = end;
 	}
 
-	// ---- Pass 2: scatter whole quads into their slot ----
-	// s_distinctKey is sorted and deduplicated, so the key a quad carries is
-	// found by binary search instead of the direct index the dense histogram
-	// allowed. At 500-1500 quads that is ten compares against a table that
-	// stays in cache, versus the 224KB the direct index cost to clear.
-	for (int_t q = 0; q < quadCount; q++)
+	for (int_t q = 0; q < quadCount; ++q)
 	{
-		const unsigned int key = s_key[q];
-		int lo = 0;
-		int hi = distinctCount - 1;
-		while (lo < hi)
-		{
-			const int mid = (lo + hi) >> 1;
-			if (s_distinctKey[mid] < key)
-				lo = mid + 1;
-			else
-				hi = mid;
-		}
-		const int_t d = (int_t)s_distinctBase[lo]++;
-		memcpy(dst + (size_t)d * kQuadInts,
-		       src + (size_t)q * kQuadInts,
+		memcpy(dst + (size_t)q * kQuadInts,
+		       src + (size_t)order[q] * kQuadInts,
 		       (size_t)kQuadInts * sizeof(int_t));
 	}
 
