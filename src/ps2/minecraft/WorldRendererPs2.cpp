@@ -763,50 +763,74 @@ bool WorldRenderer::ps2BuildRendererStep(int_t blockBudget)
 			const int_t slicesPerStep = PS2_GREEDY_SLICES_PER_STEP < 1
 				? 1
 				: (PS2_GREEDY_SLICES_PER_STEP > 16 ? 16 : PS2_GREEDY_SLICES_PER_STEP);
-			const int_t sliceBegin = ps2BuildGreedySlice;
-			int_t sliceEnd = sliceBegin + slicesPerStep;
-			if (sliceEnd > 16)
-				sliceEnd = 16;
-
-			int_t greedyX0 = x0;
-			int_t greedyY0 = y0;
-			int_t greedyZ0 = z0;
-			int_t greedyX1 = x1;
-			int_t greedyY1 = y1;
-			int_t greedyZ1 = z1;
-			if (ps2BuildGreedyFace <= 1)
-			{
-				greedyY0 = y0 + sliceBegin;
-				greedyY1 = y0 + sliceEnd;
-			}
-			else if (ps2BuildGreedyFace <= 3)
-			{
-				greedyZ0 = z0 + sliceBegin;
-				greedyZ1 = z0 + sliceEnd;
-			}
-			else
-			{
-				greedyX0 = x0 + sliceBegin;
-				greedyX1 = x0 + sliceEnd;
-			}
+			const int_t greedySliceLimit = std::min(16, ps2BuildGreedySlice + slicesPerStep);
 
 #if MC_LOG_LEVEL > 2
 			const std::uint32_t ps2GreedyStageStart = platformProfileRenderPhaseBegin();
 #endif
-			// The greedy path writes the canonical six-slot PS2 capture layout
-			// directly into the leased staging buffer. It no longer builds an
-			// eight-slot Tessellator stream only to copy/light it back into six slots.
+			// Build one independent plane at a time. Cheap planes can still consume
+			// the configured slices-per-step throughput, while an expensive plane
+			// yields once this updateRenderer() reaches the same elapsed-time bound
+			// used by the normal block scan. Greedy rectangles never span planes, so
+			// splitting the old multi-plane call does not change mesh output.
 			std::vector<int_t> &greedyRaw = ps2BuildBuffers()[0];
 			const Ps2GreedyRawTarget greedyTarget = { &greedyRaw, posX, posY, posZ };
-			const int_t faceVerts = ps2BuildSectionCache != nullptr && ps2BuildSectionCache->valid
-				? ps2_greedy_mesh_face_raw(chunkcache, ps2BuildGreedyFace,
-				                                 greedyX0, greedyY0, greedyZ0,
-				                                 greedyX1, greedyY1, greedyZ1,
-				                                 greedyTarget, *ps2BuildSectionCache)
-				: ps2_greedy_mesh_face_raw(chunkcache, ps2BuildGreedyFace,
-				                                 greedyX0, greedyY0, greedyZ0,
-				                                 greedyX1, greedyY1, greedyZ1,
-				                                 greedyTarget);
+			int_t faceVerts = 0;
+			while (ps2BuildGreedySlice < greedySliceLimit)
+			{
+				const int_t sliceBegin = ps2BuildGreedySlice;
+				const int_t sliceEnd = sliceBegin + 1;
+
+				int_t greedyX0 = x0;
+				int_t greedyY0 = y0;
+				int_t greedyZ0 = z0;
+				int_t greedyX1 = x1;
+				int_t greedyY1 = y1;
+				int_t greedyZ1 = z1;
+				if (ps2BuildGreedyFace <= 1)
+				{
+					greedyY0 = y0 + sliceBegin;
+					greedyY1 = y0 + sliceEnd;
+				}
+				else if (ps2BuildGreedyFace <= 3)
+				{
+					greedyZ0 = z0 + sliceBegin;
+					greedyZ1 = z0 + sliceEnd;
+				}
+				else
+				{
+					greedyX0 = x0 + sliceBegin;
+					greedyX1 = x0 + sliceEnd;
+				}
+
+				const int_t sliceVerts = ps2BuildSectionCache != nullptr && ps2BuildSectionCache->valid
+					? ps2_greedy_mesh_face_raw(chunkcache, ps2BuildGreedyFace,
+					                                 greedyX0, greedyY0, greedyZ0,
+					                                 greedyX1, greedyY1, greedyZ1,
+					                                 greedyTarget, *ps2BuildSectionCache)
+					: ps2_greedy_mesh_face_raw(chunkcache, ps2BuildGreedyFace,
+					                                 greedyX0, greedyY0, greedyZ0,
+					                                 greedyX1, greedyY1, greedyZ1,
+					                                 greedyTarget);
+				faceVerts += sliceVerts;
+				ps2BuildGreedySlice = sliceEnd;
+
+				if (ps2BuildGreedySlice >= 16)
+				{
+					ps2BuildGreedySlice = 0;
+					ps2BuildGreedyFace++;
+					break;
+				}
+
+				if (PLATFORM_CHUNK_BUILD_STEP_US > 0)
+				{
+					const long long elapsedNs =
+						(long long)(PlatformCompat::getMonotonicMicros() * 1000ULL) - ps2BuildStartNs;
+					if (elapsedNs >= (long long)PLATFORM_CHUNK_BUILD_STEP_US * 1000LL)
+						break;
+				}
+			}
+
 			stepDrew = faceVerts > 0;
 #if MC_LOG_LEVEL >= 2
 			platformProfileMeshWork(ps2GreedyWorkStart, PlatformMeshWork::Greedy);
@@ -814,12 +838,6 @@ bool WorldRenderer::ps2BuildRendererStep(int_t blockBudget)
 #if MC_LOG_LEVEL > 2
 			platformProfileMeshStage(ps2GreedyStageStart, PlatformMeshStage::Greedy);
 #endif
-			ps2BuildGreedySlice = sliceEnd;
-			if (ps2BuildGreedySlice >= 16)
-			{
-				ps2BuildGreedySlice = 0;
-				ps2BuildGreedyFace++;
-			}
 
 			if (faceVerts > 0)
 			{
