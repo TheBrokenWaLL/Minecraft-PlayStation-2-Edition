@@ -24,6 +24,62 @@
 #endif
 
 
+#ifdef PS2_RENDER_STATS
+namespace
+{
+// Optional coarse scopes, never per-vertex. finish() makes early returns and
+// explicitly ended scopes use the same accounting without double counting.
+struct TranslucentScope
+{
+    unsigned long long& cycles;
+    bool active;
+    unsigned int start;
+    TranslucentScope(bool enabled, unsigned long long& target)
+        : cycles(target), active(enabled), start(enabled ? ps2_vu0_ee_cycles() : 0) {}
+    void finish()
+    {
+        if (!active) return;
+        cycles += (unsigned int)(ps2_vu0_ee_cycles() - start);
+        active = false;
+    }
+    ~TranslucentScope() { finish(); }
+};
+
+// Attribute existing timer/counter deltas to this draw only. Draw submission
+// is synchronous and non-recursive; RAII covers every successful early return.
+struct TranslucentProfile
+{
+    Ps2RenderStats& stats;
+    bool enabled;
+    unsigned long transform, project, emit;
+    long strips, triangles, queueFlushes;
+    unsigned long stripPack, batchSubmit, queueFlush;
+    explicit TranslucentProfile(bool active)
+        : stats(ps2_render_stats()), enabled(active),
+          transform(stats.cycleTransform), project(stats.cycleProject), emit(stats.cycleEmit),
+          strips(stats.stripFlush), triangles(stats.batchFlush),
+          queueFlushes(stats.vu0QueueFlushes), stripPack(stats.cycleStripPack),
+          batchSubmit(stats.cycleBatchSubmit), queueFlush(stats.cycleVu0QueueFlush)
+    {
+        if (enabled) ++stats.translucent.draws;
+    }
+    ~TranslucentProfile()
+    {
+        if (!enabled) return;
+        stats.translucent.transformCycles += (unsigned long)(stats.cycleTransform - transform);
+        stats.translucent.projectCycles += (unsigned long)(stats.cycleProject - project);
+        stats.translucent.emitCycles += (unsigned long)(stats.cycleEmit - emit);
+        stats.translucent.stripPackCycles += (unsigned long)(stats.cycleStripPack - stripPack);
+        stats.translucent.batchSubmitCycles += (unsigned long)(stats.cycleBatchSubmit - batchSubmit);
+        stats.translucent.queueFlushCycles += (unsigned long)(stats.cycleVu0QueueFlush - queueFlush);
+        stats.translucent.queueFlushes += stats.vu0QueueFlushes - queueFlushes;
+        stats.translucent.stripFlushes += stats.stripFlush - strips;
+        stats.translucent.triangleFlushes += stats.batchFlush - triangles;
+    }
+};
+}
+#endif
+
 bool ps2_draw_3d(const Ps2Draw3DState& state) {
     if (!state.gsGlobal || !state.vertices || !state.mvp)
         return false;
@@ -34,6 +90,12 @@ bool ps2_draw_3d(const Ps2Draw3DState& state) {
     if (state.colorEnabled && (!state.colors || state.colorFloat))
         return false;
 
+#ifdef PS2_RENDER_STATS
+    TranslucentScope drawScope(ps2_render_context().terrainTranslucent,
+        ps2_render_stats().translucent.drawCycles);
+    TranslucentScope setupScope(ps2_render_context().terrainTranslucent,
+        ps2_render_stats().translucent.setupCycles);
+#endif
     const char* vbase = (const char*)state.vertices;
     const char* tbase = (const char*)state.texCoords;
     const char* cbase = (const char*)state.colors;
@@ -75,6 +137,9 @@ bool ps2_draw_3d(const Ps2Draw3DState& state) {
 #endif
 
     const bool terrainTranslucent = ps2_render_context().terrainTranslucent;
+#ifdef PS2_RENDER_STATS
+    TranslucentProfile translucentProfile(terrainTranslucent);
+#endif
     const bool nativeTranslucentFog =
         terrainTranslucent && state.render.fogEnabled && perspBatch;
 
@@ -93,6 +158,14 @@ bool ps2_draw_3d(const Ps2Draw3DState& state) {
     const float radialInvProjY = radialFogProjection ? 1.0f / projection[5] : 0.0f;
     const float radialProjX = radialFogProjection ? projection[8] : 0.0f;
     const float radialProjY = radialFogProjection ? projection[9] : 0.0f;
+
+    // Fold viewport normalization and projection into a per-draw affine map.
+    // Keep the radial distance and GS fog coefficient unchanged; only avoid
+    // repeating two viewport divisions and offset arithmetic per vertex.
+    const float radialScreenScaleX = radialFogProjection ? radialInvProjX / hw : 0.0f;
+    const float radialScreenScaleY = radialFogProjection ? -radialInvProjY / hh : 0.0f;
+    const float radialScreenBiasX = (radialProjX - 1.0f) * radialInvProjX;
+    const float radialScreenBiasY = (radialProjY + 1.0f) * radialInvProjY;
 
     if (nativeTranslucentFog)
         ps2_gs_state_apply_fog_color(state.render.fogR, state.render.fogG, state.render.fogB);
@@ -125,6 +198,9 @@ bool ps2_draw_3d(const Ps2Draw3DState& state) {
     auto flushStrip = [&]() {
         if (nstrip <= 0)
             return;
+#ifdef PS2_RENDER_STATS
+        const unsigned long emitBeforeFlush = ps2_render_stats().cycleEmit;
+#endif
         PS2_VU0_CYC_BEGIN(cycFlush);
         PS2_FAST_DRAW_STAT(ps2_render_stats().stripFlush++);
         const int quadCount = nstrip / 4;
@@ -162,6 +238,8 @@ bool ps2_draw_3d(const Ps2Draw3DState& state) {
             // TLB-miss storm the console does not come back from.
             nstrip = 0;
             PS2_VU0_CYC_END(cycFlush, ps2_render_stats().cycleEmit);
+            PS2_FAST_DRAW_STAT(ps2_render_stats().cycleBatchSubmit +=
+                ps2_render_stats().cycleEmit - emitBeforeFlush);
             return;
         }
         // Native GS fog interpolates its own F coefficient, independently of
@@ -212,11 +290,16 @@ bool ps2_draw_3d(const Ps2Draw3DState& state) {
 
         nstrip = 0;
         PS2_VU0_CYC_END(cycFlush, ps2_render_stats().cycleEmit);
+        PS2_FAST_DRAW_STAT(ps2_render_stats().cycleBatchSubmit +=
+            ps2_render_stats().cycleEmit - emitBeforeFlush);
     };
 #endif
 
     auto flushBatch = [&]() {
         if (nbatch > 0) {
+#ifdef PS2_RENDER_STATS
+            const unsigned long emitBeforeFlush = ps2_render_stats().cycleEmit;
+#endif
             PS2_VU0_CYC_BEGIN(cycFlush);
             PS2_FAST_DRAW_STAT(ps2_render_stats().batchFlush++);
             ps2_vu0_queue_guard(state.gsGlobal, nbatch * 3);
@@ -228,6 +311,8 @@ bool ps2_draw_3d(const Ps2Draw3DState& state) {
             state.gsGlobal->PrimFogEnable = oldFogEnable;
             nbatch = 0;
             PS2_VU0_CYC_END(cycFlush, ps2_render_stats().cycleEmit);
+            PS2_FAST_DRAW_STAT(ps2_render_stats().cycleBatchSubmit +=
+                ps2_render_stats().cycleEmit - emitBeforeFlush);
         }
     };
 
@@ -320,10 +405,8 @@ bool ps2_draw_3d(const Ps2Draw3DState& state) {
         //   sy = (-ndcY + 1) * halfHeight
         // and the perspective matrix gives clipW = -eyeZ. Recover eyeX/eyeZ
         // and eyeY/eyeZ from NDC, then take the true eye-space radius.
-        const float ndcX = p.x / hw - 1.0f;
-        const float ndcY = 1.0f - p.y / hh;
-        const float xOverDepth = (ndcX + radialProjX) * radialInvProjX;
-        const float yOverDepth = (ndcY + radialProjY) * radialInvProjY;
+        const float xOverDepth = p.x * radialScreenScaleX + radialScreenBiasX;
+        const float yOverDepth = p.y * radialScreenScaleY + radialScreenBiasY;
         return p.w * sqrtf(1.0f + xOverDepth * xOverDepth +
                             yOverDepth * yOverDepth);
     };
@@ -470,7 +553,19 @@ bool ps2_draw_3d(const Ps2Draw3DState& state) {
     // homogeneous space, fan-triangulate, project and emit the pieces.
     auto clipAndEmit = [&](const ClipVert* t0, const ClipVert* t1, const ClipVert* t2, int mask) {
         poly[0] = *t0; poly[1] = *t1; poly[2] = *t2;
+#ifdef PS2_RENDER_STATS
+        const unsigned int clipStart = terrainTranslucent ? ps2_vu0_ee_cycles() : 0;
+#endif
         int n = ps2_clip_poly_guard(poly, 3, mask, gx, gy);
+#ifdef PS2_RENDER_STATS
+        if (terrainTranslucent)
+        {
+            Ps2TranslucentStats& stats = ps2_render_stats().translucent;
+            stats.clipCycles += ps2_vu0_ee_cycles() - clipStart;
+            ++stats.clippedInputTriangles;
+            if (n >= 3) stats.clippedOutputTriangles += n - 2;
+        }
+#endif
         if (n == 0) {
             PS2_FAST_DRAW_STAT(if (state.debugClipped) (*state.debugClipped)++);
             return;
@@ -525,6 +620,10 @@ bool ps2_draw_3d(const Ps2Draw3DState& state) {
     // Emit one triangle of a quad given unique-vertex cache slots (lazy
     // projection + lazy attribute fetch, both shared between the two tris).
     auto emitQuadTri = [&](int a, int b, int c) {
+#ifdef PS2_RENDER_STATS
+        TranslucentScope triangleScope(terrainTranslucent,
+            ps2_render_stats().translucent.quadTriangleCycles);
+#endif
         if (uoc[a] & uoc[b] & uoc[c]) {
             PS2_FAST_DRAW_STAT(if (state.debugClipped) (*state.debugClipped)++);
             return;
@@ -580,6 +679,10 @@ bool ps2_draw_3d(const Ps2Draw3DState& state) {
             }
         }
         PS2_VU0_CYC_END(cycProj, ps2_render_stats().cycleProject);
+#ifdef PS2_RENDER_STATS
+        TranslucentScope prepareScope(terrainTranslucent,
+            ps2_render_stats().translucent.stripPrepareCycles);
+#endif
         // All four projected corners beyond the same screen edge -> reject.
         if ((upr[0].x < 0.0f && upr[1].x < 0.0f && upr[2].x < 0.0f && upr[3].x < 0.0f) ||
             (upr[0].y < 0.0f && upr[1].y < 0.0f && upr[2].y < 0.0f && upr[3].y < 0.0f) ||
@@ -611,6 +714,18 @@ bool ps2_draw_3d(const Ps2Draw3DState& state) {
         Ps2ClampSel quadClamp = currentQuadClamp;
         if (currentQuadClampValid) {
             PS2_FAST_DRAW_STAT(ps2_render_stats().clampAsk++);
+        } else if (state.tileAtlas && !state.ortho) {
+            // World atlas selection depends only on the minimum UV. Do not
+            // scan maxima that REGION_REPEAT never uses. Retain the shared
+            // selector's truncation/clamping rules, including rotated water UVs.
+            float minU = uev[0].u, minV = uev[0].v;
+            for (int i = 1; i < 4; ++i) {
+                if (uev[i].u < minU) minU = uev[i].u;
+                if (uev[i].v < minV) minV = uev[i].v;
+            }
+            PS2_FAST_DRAW_STAT(ps2_render_stats().clampAsk++);
+            quadClamp = ps2_select_clamp(texW, texH, false, true,
+                minU * texW, minV * texH, 0.0f, 0.0f);
         } else {
             // UV bounds over the four corners, in texels. For strip quads the
             // selected state is staged beside the vertices instead of applied
@@ -627,6 +742,9 @@ bool ps2_draw_3d(const Ps2Draw3DState& state) {
                 minU * texW, minV * texH, maxU * texW, maxV * texH);
         }
 
+#ifdef PS2_RENDER_STATS
+        prepareScope.finish();
+#endif
         // A strip flush changes CLAMP; pending triangles still require the
         // tile selected when they were staged. Drain them before any strip
         // can be queued/flushed, preserving both draw order and sampler state.
@@ -638,6 +756,9 @@ bool ps2_draw_3d(const Ps2Draw3DState& state) {
         // Strip order (1,2,0,3) yields triangles (1,2,0) and (2,0,3) — the
         // same two the list path draws. First two vertices use XYZ3 (no
         // drawing kick), so consecutive quads chain in one packet.
+#ifdef PS2_RENDER_STATS
+        const unsigned long emitBeforePack = ps2_render_stats().cycleEmit;
+#endif
         PS2_VU0_CYC_BEGIN(cycPack);
         static const int order[4] = { 1, 2, 0, 3 };
         GSPRIMSTQPOINT* sp = &stripBatch[nstrip];
@@ -656,6 +777,8 @@ bool ps2_draw_3d(const Ps2Draw3DState& state) {
         }
         nstrip += 4;
         PS2_VU0_CYC_END(cycPack, ps2_render_stats().cycleEmit);
+        PS2_FAST_DRAW_STAT(ps2_render_stats().cycleStripPack +=
+            ps2_render_stats().cycleEmit - emitBeforePack);
         PS2_FAST_DRAW_STAT(if (state.debugPrims) (*state.debugPrims) += 2);
         return true;
     };
@@ -665,6 +788,11 @@ bool ps2_draw_3d(const Ps2Draw3DState& state) {
     // uclip[]. Every entry into this file funnels through here so projection,
     // clipping, fog, lighting, clamp selection and GIF output stay shared.
     auto processClipQuad = [&]() {
+#ifdef PS2_RENDER_STATS
+        TranslucentScope classifyScope(terrainTranslucent,
+            ps2_render_stats().translucent.classifyCycles);
+#endif
+        PS2_FAST_DRAW_STAT(if (terrainTranslucent) ++ps2_render_stats().translucent.quads);
         currentQuadClampValid = false;
         const Ps2NativeClampRun* clampRun = clampRunCursor.find(usrc[0]);
         if (clampRun != nullptr) {
@@ -686,6 +814,17 @@ bool ps2_draw_3d(const Ps2Draw3DState& state) {
                 : ps2_clip_outcode(uclip[i].x, uclip[i].y, uclip[i].z, uclip[i].w, gx, gy);
             uprValid[i] = uevValid[i] = false;
         }
+        // A shared outside plane rejects both constituent triangles. Keep
+        // the same clipped-primitive count without entering either emitter.
+        if ((uoc[0] & uoc[1] & uoc[2] & uoc[3]) != 0) {
+            PS2_FAST_DRAW_STAT(if (terrainTranslucent)
+                ++ps2_render_stats().translucent.rejectedQuads);
+            PS2_FAST_DRAW_STAT(if (state.debugClipped) (*state.debugClipped) += 2);
+            return;
+        }
+#ifdef PS2_RENDER_STATS
+        classifyScope.finish();
+#endif
 #if PS2_VU0_STRIP_QUADS
         if (perspBatch && (uoc[0] | uoc[1] | uoc[2] | uoc[3]) == 0) {
             emitQuadStrip();
@@ -707,6 +846,9 @@ bool ps2_draw_3d(const Ps2Draw3DState& state) {
         processClipQuad();
     };
 
+#ifdef PS2_RENDER_STATS
+    setupScope.finish();
+#endif
     if (state.quads) {
         const int nquad = state.count / 4;
         const bool sliced = state.slices != nullptr && state.sliceCount > 0;

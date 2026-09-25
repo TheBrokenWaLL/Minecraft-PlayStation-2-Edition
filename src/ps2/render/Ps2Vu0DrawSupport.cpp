@@ -7,6 +7,7 @@
 #include <gsInline.h>
 
 #include "ps2/render/Ps2GsQueue.h"
+#include "ps2/render/Ps2RenderStats.h"
 #include "ps2/render/Ps2RenderBackend.h"
 #include "ps2/system/Ps2Scratchpad.h"
 
@@ -37,7 +38,10 @@ void ps2_vu0_queue_guard(GSGLOBAL* gs, int vertexCount)
         ps2_gs_queue_note_overflow((long)(cursor - limit));
     if (cursor < limit && (unsigned int)(limit - cursor) > needed)
         return;
+    PS2_VU0_CYC_BEGIN(queueFlushStart);
     ps2_gs_queue_flush_oneshot();
+    PS2_VU0_CYC_END(queueFlushStart, ps2_render_stats().cycleVu0QueueFlush);
+    PS2_RENDER_STAT(++ps2_render_stats().vu0QueueFlushes);
 }
 
 VU_MATRIX ps2_vu0_mvp_to_vu(const float* matrix)

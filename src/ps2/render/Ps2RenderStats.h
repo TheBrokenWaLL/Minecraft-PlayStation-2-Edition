@@ -2,6 +2,20 @@
 
 #ifdef PS2_PLATFORM
 
+#ifdef PS2_RENDER_STATS
+struct Ps2TranslucentStats
+{
+    unsigned long long transformCycles = 0, projectCycles = 0, emitCycles = 0, clipCycles = 0;
+    unsigned long long stripPackCycles = 0, batchSubmitCycles = 0, queueFlushCycles = 0;
+    unsigned long long drawCycles = 0, setupCycles = 0, classifyCycles = 0;
+    unsigned long long stripPrepareCycles = 0, quadTriangleCycles = 0;
+    long queueFlushes = 0;
+    long passes = 0, draws = 0, quads = 0, rejectedQuads = 0;
+    long clippedInputTriangles = 0, clippedOutputTriangles = 0;
+    long stripFlushes = 0, triangleFlushes = 0;
+};
+#endif
+
 struct Ps2RenderStats
 {
     long depthClears = 0;
@@ -35,6 +49,7 @@ struct Ps2RenderStats
 #endif
 
 #ifdef PS2_RENDER_STATS
+    Ps2TranslucentStats translucent;
     long stripFlush = 0;
     long batchFlush = 0;
     long stripQuads = 0;
@@ -44,6 +59,8 @@ struct Ps2RenderStats
     unsigned long cycleTransform = 0;
     unsigned long cycleProject = 0;
     unsigned long cycleEmit = 0;
+    unsigned long cycleStripPack = 0, cycleBatchSubmit = 0, cycleVu0QueueFlush = 0;
+    long vu0QueueFlushes = 0;
 #endif
 };
 

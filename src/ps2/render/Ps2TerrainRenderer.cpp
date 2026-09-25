@@ -1,5 +1,6 @@
 #include "ps2/render/Ps2TerrainRenderer.h"
 #include "ps2/render/Ps2RenderBackend.h"
+#include "ps2/render/Ps2RenderStats.h"
 #include "ps2/render/Ps2TerrainRuntime.h"
 #include "ps2/render/Ps2TerrainCommands.h"
 #include "ps2/render/Ps2Vu1Terrain.h"
@@ -35,6 +36,10 @@ void ps2_terrain_begin(unsigned int textureId, Ps2TerrainPass pass)
 #ifdef PS2_RENDER_STATS
     if (pass == PS2_TERRAIN_PASS_OPAQUE)
         ++runtime.clusterStats.opaquePasses;
+#endif
+#ifdef PS2_RENDER_STATS
+    if (pass == PS2_TERRAIN_PASS_TRANSLUCENT)
+        ++ps2_render_stats().translucent.passes;
 #endif
     s_currentPass = pass;
     ps2_native_begin_terrain_pass(textureId, nativePass(pass));
