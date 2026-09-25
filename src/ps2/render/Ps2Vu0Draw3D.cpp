@@ -834,7 +834,7 @@ bool ps2_draw_3d(const Ps2Draw3DState& state) {
 #ifdef PS2_MERGE_WATER_TOPS
         if (terrainTranslucent && state.quads && state.tileAtlas && !state.ortho &&
             !currentQuadClampValid) {
-            // A merged top repeats the original tile twice along U. Clipping
+            // A merged top repeats its original tile along U and/or V. Clipping
             // can move a triangle's minimum into the second repeat, so retain
             // the source quad's tile for both triangles and all clipped fans.
             for (int i = 0; i < 4; ++i) {
@@ -845,8 +845,12 @@ bool ps2_draw_3d(const Ps2Draw3DState& state) {
             }
             if (uev[0].u == uev[1].u && uev[2].u == uev[3].u &&
                 uev[0].v == uev[3].v && uev[1].v == uev[2].v &&
-                uev[2].u - uev[0].u == 2.0f / 16.0f &&
-                uev[1].v - uev[0].v == 1.0f / 16.0f) {
+                (uev[2].u - uev[0].u == 1.0f / 16.0f ||
+                 uev[2].u - uev[0].u == 2.0f / 16.0f) &&
+                (uev[1].v - uev[0].v == 1.0f / 16.0f ||
+                 uev[1].v - uev[0].v == 2.0f / 16.0f) &&
+                (uev[2].u - uev[0].u == 2.0f / 16.0f ||
+                 uev[1].v - uev[0].v == 2.0f / 16.0f)) {
                 currentQuadClamp = ps2_select_clamp(texW, texH, false, true,
                     uev[0].u * texW, uev[0].v * texH, 0.0f, 0.0f);
                 currentQuadClampValid = true;

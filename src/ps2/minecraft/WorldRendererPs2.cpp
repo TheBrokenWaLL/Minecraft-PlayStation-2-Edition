@@ -856,17 +856,19 @@ bool WorldRenderer::ps2BuildRendererStep(int_t blockBudget)
                 if (ps2BuildPass == 1 && stepTex && stepCol &&
                     stepMode == 7 && Block::waterStill != nullptr)
                 {
-                    const unsigned beforeQuads = (unsigned)(stepRaw.size() / 24u);
-                    const unsigned merged = ps2MergeWaterTopPairs(stepRaw,
+                    const Ps2WaterMergeStats water = ps2MergeWaterTops(stepRaw,
                         Block::waterStill->getBlockTextureFromSide(1),
                         [&](int lx, int ly, int lz) {
                             return chunkcache.getBlockId(posX+lx, posY+ly, posZ+lz) ==
                                 Block::waterStill->blockID &&
                                 chunkcache.getBlockMetadata(posX+lx, posY+ly, posZ+lz) == 0;
                         });
-                    if (merged != 0)
-                        MC_LOG_DEBUG("render", "[PS2] water merge: inputQuads=%u mergedPairs=%u outputQuads=%u\n",
-                            beforeQuads, merged, beforeQuads-merged);
+                    MC_LOG_DEBUG("render", "[PS2] water merge: inputQuads=%u eligible=%u"
+                        " rejectShapeUvColor=%u rejectMaterial=%u runBoundaries=%u"
+                        " pairs=%u squares=%u removed=%u outputQuads=%u\n",
+                        water.input, water.eligible, water.rejectedShape, water.rejectedMaterial,
+                        water.boundaries, water.pairs, water.squares, water.removed,
+                        water.input-water.removed);
                 }
 #endif
 				stepVerts = (int_t)(stepRaw.size() / slots);
