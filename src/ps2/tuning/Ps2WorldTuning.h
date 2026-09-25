@@ -722,12 +722,12 @@
 // The individual ceilings were tuned one at a time, and on a frame that runs
 // a tick they stack: 8000 generation + 4000 populate + 2500 lighting + 3000
 // frame generation = 17.5 ms of streaming before the renderer starts, on top
-// of the 6 ms mesh budget. At 30 fps that is the frame. The next frame carries
+// of the 4 ms mesh budget. At 30 fps that is the frame. The next frame carries
 // no tick and pays 3 ms, which is the alternating hitch the player feels while
 // flying into new terrain.
 //
 // 8000 caps the world side at a quarter of a 30 fps frame. Together with
-// PS2_CHUNK_BUILD_BUDGET_MS the worst case is ~14 ms of streaming, against
+// PS2_CHUNK_BUILD_BUDGET_MS the worst case is ~12 ms of streaming, against
 // ~23 ms before, plus whatever an atomic step overshoots. Each drain still
 // runs at least one step per frame, so nothing starves; the queues just
 // spread over more frames. 0 restores the independent ceilings.

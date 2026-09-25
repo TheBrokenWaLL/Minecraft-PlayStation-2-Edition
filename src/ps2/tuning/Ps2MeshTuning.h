@@ -264,7 +264,7 @@
 //
 // A block change within this distance of the viewer marks the section urgent.
 // Urgent sections sort ahead of active builds and run to completion inside
-// their own wall-clock budget, before the shared 6 ms budget is spent. Two
+// their own wall-clock budget, before the shared 4 ms budget is spent. Two
 // sections (32 blocks) covers what the player can reach or is looking at.
 #define PS2_URGENT_MESH_DISTANCE_SQ 1024.0f
 // A dense section is ~10-20 ms; one frame of hitch on an edit is the trade
@@ -373,7 +373,7 @@
 // combinations (see the boot USABLE/DEAD probe), in which case the elapsed time
 // reads 0, the ceiling never trips, and PS2_MAX_RENDERER_UPDATES_PER_FRAME alone
 // governs exactly as it does today. Never make this the only limit.
-#define PS2_CHUNK_BUILD_BUDGET_MS 6
+#define PS2_CHUNK_BUILD_BUDGET_MS 4
 
 // Keep a short visible loading phase for normal local world entry, but spend it
 // on renderer warm-up rather than a blind sleep. The minimum is measured from
@@ -382,7 +382,7 @@
 #define PS2_LOAD_TERRAIN_MIN_MS 1200
 #define PS2_LOAD_TERRAIN_WARMUP_MS 2500
 
-// Per-renderer wall-clock slice. The shared 6 ms budget is checked only
+// Per-renderer wall-clock slice. The shared 4 ms budget is checked only
 // between renderer updates, so one dense 512-block step can otherwise overrun
 // the whole frame by itself. Measured 2026-09-25 while walking around the ocean:
 // the build phase averaged 6-10 ms but individual chunk-build samples still
