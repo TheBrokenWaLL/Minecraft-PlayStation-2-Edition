@@ -121,7 +121,7 @@ inline void applyPs2LegacyAtmosphereRgb(Minecraft *mc, float &red, float &green,
 }
 
 #if PLATFORM_PS2
-inline bool ps2SectionBeyondTranslucentFog(WorldRenderer *renderer,
+inline bool ps2SectionBeyondFog(WorldRenderer *renderer,
 	float eyeX, float eyeY, float eyeZ, float distance)
 {
 	if (renderer == nullptr)
@@ -1445,12 +1445,12 @@ int_t RenderGlobal::renderSortedRenderers(int_t i, int_t j, int_t k, double d)
 
 	EntityLiving *entityliving = mc->renderViewEntity;
 #if PLATFORM_PS2
-	bool ps2CullTranslucentByFog = false;
-	float ps2TranslucentCullDistance = 0.0f;
+	bool ps2CullTerrainByFog = false;
+	float ps2TerrainCullDistance = 0.0f;
 	float ps2FogEyeX = 0.0f;
 	float ps2FogEyeY = 0.0f;
 	float ps2FogEyeZ = 0.0f;
-	if (k == 1 && entityliving != nullptr)
+	if ((k == 0 || k == 1) && entityliving != nullptr)
 	{
 		const int_t viewBlockId = mc != nullptr && mc->theWorld != nullptr
 			? ActiveRenderInfo::getBlockIdAtEntityViewpoint(mc->theWorld, entityliving, static_cast<float>(d))
@@ -1461,12 +1461,12 @@ int_t RenderGlobal::renderSortedRenderers(int_t i, int_t j, int_t k, double d)
 
 		if (viewMaterial == Material::water)
 		{
-			// Match EntityRenderer's dense underwater fog. Clear Water and Water
-			// Breathing extend visibility enough that the fixed 32-block cutoff
-			// would become visible, so keep the full pass in those cases.
-			ps2CullTranslucentByFog = !Config::isClearWater() &&
+			// Preserve the existing translucent-only underwater cull. Clear Water
+			// and Water Breathing extend visibility enough that the fixed 32-block
+			// cutoff would become visible, so keep the full pass in those cases.
+			ps2CullTerrainByFog = k == 1 && !Config::isClearWater() &&
 				!entityliving->isPotionActive(Potion::waterBreathing);
-			ps2TranslucentCullDistance = PS2_UNDERWATER_TRANSLUCENT_CULL_DISTANCE;
+			ps2TerrainCullDistance = PS2_UNDERWATER_TRANSLUCENT_CULL_DISTANCE;
 		}
 		else if (mc != nullptr && mc->theWorld != nullptr && mc->theWorld->worldProvider != nullptr &&
 			!mc->theWorld->worldProvider->isNether && !Config::isFogOff())
@@ -1474,14 +1474,15 @@ int_t RenderGlobal::renderSortedRenderers(int_t i, int_t j, int_t k, double d)
 			// On the PS2 fixed-grid renderer, EntityRenderer clamps normal
 			// linear fog to the loaded edge. Sections whose entire AABB is past
 			// that edge are fully fogged already, so submitting their expensive
-			// translucent geometry cannot affect the final image. This matters
-			// most while flying over large oceans, where pass 1 otherwise walks
-			// many diagonal/deep sections that are hidden by fog.
-			ps2CullTranslucentByFog = true;
-			ps2TranslucentCullDistance = static_cast<float>(PLATFORM_VISIBLE_CHUNK_RADIUS * 16);
+			// terrain geometry cannot affect the final image. Apply the same
+			// conservative whole-AABB rejection to both opaque and translucent
+			// passes. This matters in villages as well as oceans: pass 0 otherwise
+			// spends several milliseconds drawing sections already replaced by fog.
+			ps2CullTerrainByFog = true;
+			ps2TerrainCullDistance = static_cast<float>(PLATFORM_VISIBLE_CHUNK_RADIUS * 16);
 		}
 
-		if (ps2CullTranslucentByFog)
+		if (ps2CullTerrainByFog)
 		{
 			ps2FogEyeX = static_cast<float>(entityliving->lastTickPosX +
 				(entityliving->posX - entityliving->lastTickPosX) * d);
@@ -1531,9 +1532,9 @@ int_t RenderGlobal::renderSortedRenderers(int_t i, int_t j, int_t k, double d)
 			continue;
 
 #if PLATFORM_PS2
-		if (ps2CullTranslucentByFog &&
-			ps2SectionBeyondTranslucentFog(sortedRenderer, ps2FogEyeX, ps2FogEyeY, ps2FogEyeZ,
-				ps2TranslucentCullDistance))
+		if (ps2CullTerrainByFog &&
+			ps2SectionBeyondFog(sortedRenderer, ps2FogEyeX, ps2FogEyeY, ps2FogEyeZ,
+				ps2TerrainCullDistance))
 		{
 			continue;
 		}
