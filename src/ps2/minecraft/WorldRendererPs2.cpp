@@ -10,6 +10,9 @@
 #include "net/minecraft/src/Config.h"
 #include "net/minecraft/src/ConnectedTextures.h"
 #include "net/minecraft/src/Block.h"
+#ifdef PS2_MERGE_WATER_TOPS
+#include "net/minecraft/src/CustomColorizer.h"
+#endif
 #include "net/minecraft/src/RenderBlocks.h"
 #include "net/minecraft/src/Tessellator.h"
 #include "net/minecraft/src/Chunk.h"
@@ -83,6 +86,93 @@ namespace
         const std::size_t target = ((required + growthInts - 1u) / growthInts) * growthInts;
         buffer.reserve(target);
     }
+
+#ifdef PS2_MERGE_WATER_TOPS
+    static int_t ps2SectionBlockIndex(int_t x, int_t y, int_t z)
+    {
+        return x | (z << 4) | (y << 8);
+    }
+
+    // Fast path for the interior of a flat source-water surface. The generic
+    // fluid renderer evaluates six faces, four interpolated corner heights and
+    // flow direction for every block, even though a deep, uninterrupted ocean
+    // source has only one visible face and all four heights are identical.
+    //
+    // Keep the predicate intentionally strict: section borders, shallow water,
+    // flowing water, coastlines and any surface with water above fall back to
+    // RenderBlocks unchanged. The emitted quad matches the vanilla still-water
+    // top layout, so the existing bounded 2x2 merge can consume it normally.
+    static bool ps2RenderFlatStillWaterTop(const Ps2MeshSectionCache *sectionCache,
+                                           ChunkCache &chunkcache, Tessellator *tessellator,
+                                           Block *block, int_t local,
+                                           int_t x, int_t y, int_t z)
+    {
+        if (sectionCache == nullptr || !sectionCache->valid ||
+            block == nullptr || block != Block::waterStill ||
+            Block::waterStill == nullptr || Block::waterMoving == nullptr)
+            return false;
+
+        const int_t lx = local & 15;
+        const int_t lz = (local >> 4) & 15;
+        const int_t ly = (local >> 8) & 15;
+        if (lx <= 0 || lx >= 15 || lz <= 0 || lz >= 15 || ly <= 0 || ly >= 15)
+            return false;
+
+        // Only source blocks use the static top texture and zero-flow UVs.
+        if (chunkcache.getBlockMetadata(x, y, z) != 0)
+            return false;
+
+        const int_t stillId = Block::waterStill->blockID;
+        const int_t movingId = Block::waterMoving->blockID;
+        const auto blockIdAt = [&](int_t sx, int_t sy, int_t sz) -> int_t {
+            return sectionCache->blockIds[static_cast<std::size_t>(
+                ps2SectionBlockIndex(sx, sy, sz))];
+        };
+
+        // A water block below guarantees the bottom face is hidden. Requiring a
+        // full 3x3 source-water neighborhood makes every corner height exactly
+        // the same as the generic renderer. No water may sit above any of those
+        // samples, otherwise getFluidHeight() would raise that corner to 1.0.
+        if (blockIdAt(lx, ly - 1, lz) != stillId)
+            return false;
+        for (int_t dz = -1; dz <= 1; ++dz)
+        {
+            for (int_t dx = -1; dx <= 1; ++dx)
+            {
+                if (blockIdAt(lx + dx, ly, lz + dz) != stillId)
+                    return false;
+                const int_t above = blockIdAt(lx + dx, ly + 1, lz + dz);
+                if (above == stillId || above == movingId)
+                    return false;
+            }
+        }
+
+        const int_t color = CustomColorizer::getFluidColor(block, &chunkcache, x, y, z);
+        const float red = (float)(color >> 16 & 0xff) / 255.0f;
+        const float green = (float)(color >> 8 & 0xff) / 255.0f;
+        const float blue = (float)(color & 0xff) / 255.0f;
+
+        const int_t tile = block->getBlockTextureFromSideAndMetadata(1, 0);
+        const tess_coord_t u0 = (tess_coord_t)((tile & 0xf) << 4) / 256.0f;
+        const tess_coord_t v0 = (tess_coord_t)(tile & 0xf0) / 256.0f;
+        const tess_coord_t u1 = u0 + (tess_coord_t)(16.0f / 256.0f);
+        const tess_coord_t v1 = v0 + (tess_coord_t)(16.0f / 256.0f);
+
+        // Four metadata-0 source samples produce the exact 8/9 surface height
+        // in RenderBlocks::getFluidHeight(). Use the same float ratio directly
+        // so this hot path does not repeat the weighted-height loop per block.
+        constexpr float kFlatSourceHeight = 8.0f / 9.0f;
+        const float topY = (float)y + kFlatSourceHeight;
+
+        tessellator->setBrightness(block->getMixedBrightnessForBlock(&chunkcache, x, y, z));
+        tessellator->setColorOpaque_F(red, green, blue);
+        tessellator->addVertexWithUV(x + 0, topY, z + 0, u0, v0);
+        tessellator->addVertexWithUV(x + 0, topY, z + 1, u0, v1);
+        tessellator->addVertexWithUV(x + 1, topY, z + 1, u1, v1);
+        tessellator->addVertexWithUV(x + 1, topY, z + 0, u1, v0);
+        return true;
+    }
+#endif
 
     static void logPackedFallbackStats()
     {
@@ -816,6 +906,13 @@ bool WorldRenderer::ps2BuildRendererStep(int_t blockBudget)
 				stepDrew |= ps2Renderblocks.renderSimpleOpaqueCubePs2(block, x, y, z, exposedFaceMask);
 			else
 #endif
+#ifdef PS2_MERGE_WATER_TOPS
+			if (ps2BuildPass == 1 && block == Block::waterStill &&
+				ps2RenderFlatStillWaterTop(ps2BuildSectionCache, chunkcache, ps2Tessellator,
+					block, local, x, y, z))
+				stepDrew = true;
+			else
+#endif
 				stepDrew |= ps2Renderblocks.renderBlockByRenderType(block, x, y, z);
 		}
 #if MC_LOG_LEVEL > 2
@@ -863,7 +960,11 @@ bool WorldRenderer::ps2BuildRendererStep(int_t blockBudget)
                                 Block::waterStill->blockID &&
                                 chunkcache.getBlockMetadata(posX+lx, posY+ly, posZ+lz) == 0;
                         });
-                    MC_LOG_DEBUG("render", "[PS2] water merge: inputQuads=%u eligible=%u"
+                    // Per-step merge statistics are intentionally trace-only. Level-2
+                    // profiling runs while terrain streams, and each PS2 log line flushes
+                    // stdout; keeping this at DEBUG made the diagnostic itself consume
+                    // mesh-budget time and slowed the backlog it was measuring.
+                    MC_LOG_TRACE("render", "[PS2] water merge: inputQuads=%u eligible=%u"
                         " rejectShapeUvColor=%u rejectMaterial=%u runBoundaries=%u"
                         " pairs=%u squares=%u removed=%u outputQuads=%u\n",
                         water.input, water.eligible, water.rejectedShape, water.rejectedMaterial,

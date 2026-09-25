@@ -382,12 +382,15 @@
 #define PS2_LOAD_TERRAIN_MIN_MS 1200
 #define PS2_LOAD_TERRAIN_WARMUP_MS 2500
 
-// Per-renderer wall-clock slice. Disabled after the first runtime trial: the
-// startup sample completed 72 build calls with zero published vertices and no
-// terrain reached either render backend. The deterministic 512-block limit
-// below and the 6ms inter-renderer budget remain active, matching the last
-// known-good configuration while the inner slicing is redesigned.
-#define PS2_CHUNK_BUILD_STEP_US 0
+// Per-renderer wall-clock slice. The shared 6 ms budget is checked only
+// between renderer updates, so one dense 512-block step can otherwise overrun
+// the whole frame by itself. Measured 2026-09-25 while walking around the ocean:
+// the build phase averaged 6-10 ms but individual chunk-build samples still
+// reached 22-27 ms, coinciding with the 20-25 FPS oscillation. Check every 32
+// blocks and yield dense steps at roughly 4 ms; cheap steps still consume the
+// full 512-block batch, preserving streaming throughput where the work is cheap.
+// The published mesh remains untouched until the incremental build completes.
+#define PS2_CHUNK_BUILD_STEP_US 4000
 #define PS2_CHUNK_BUILD_TIME_CHECK_BLOCKS 32
 
 // The PS2 renderer grid is 5x3x5 = 75 sections. The old cap of 64 silently
