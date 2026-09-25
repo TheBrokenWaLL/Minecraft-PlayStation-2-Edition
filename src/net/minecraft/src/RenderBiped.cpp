@@ -52,10 +52,27 @@ void RenderBiped::renderEquippedItems(EntityLiving* entityLiving, float f) {
             renderRotate(20.0f, 0.0f, 0.0f, 1.0f);
         }
 
+#if PLATFORM_PS2
+        // The bow's equipped-item transform contains a negative Y scale, so its
+        // winding is reversed relative to the normal model path. The extruded
+        // item mesh is closed; culling the transformed front faces therefore
+        // removes only the hidden half while keeping the visible surface.
+        const bool ps2CullBowFaces = Item::bow != nullptr && itemStack->itemID == Item::bow->shiftedIndex;
+        if (ps2CullBowFaces) {
+            renderCullFace(RenderFace::Front);
+            renderEnable(RenderCapability::CullFace);
+        }
+#endif
         renderManager->itemRenderer->renderItem(entityLiving, itemStack, 0);
         if (item->func_46058_c()) {
             renderManager->itemRenderer->renderItem(entityLiving, itemStack, 1);
         }
+#if PLATFORM_PS2
+        if (ps2CullBowFaces) {
+            renderDisable(RenderCapability::CullFace);
+            renderCullFace(RenderFace::Back);
+        }
+#endif
         renderPopMatrix();
     }
 }

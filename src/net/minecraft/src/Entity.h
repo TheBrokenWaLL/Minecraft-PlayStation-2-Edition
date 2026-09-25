@@ -75,6 +75,10 @@ public:
 	virtual void onEntityUpdate();
 
 protected:
+	// Lightweight base tick used by server-authoritative remote living entities
+	// on throttled PS2 multiplayer ticks. It advances interpolation history and
+	// timers without querying water/lava or block collisions.
+	void onRemoteMultiplayerEntityUpdateLite();
 	virtual void setOnFireFromLava();
 	virtual void kill();
 

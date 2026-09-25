@@ -527,6 +527,30 @@ void Entity::onEntityUpdate()
 	isFirstUpdate = false;
 }
 
+void Entity::onRemoteMultiplayerEntityUpdateLite()
+{
+	// Remote mobs are authoritative on the multiplayer server. On PS2 throttled
+	// ticks we still need the bookkeeping normally performed by onEntityUpdate(),
+	// but repeating water/lava material scans for every remote mob is redundant.
+	if (ridingEntity != nullptr && ridingEntity->isDead)
+	{
+		ridingEntity = nullptr;
+	}
+	++ticksExisted;
+	prevDistanceWalkedModified = distanceWalkedModified;
+	prevPosX = posX;
+	prevPosY = posY;
+	prevPosZ = posZ;
+	prevRotationPitch = rotationPitch;
+	prevRotationYaw = rotationYaw;
+	fire = 0;
+	if (posY < -64.0)
+	{
+		kill();
+	}
+	isFirstUpdate = false;
+}
+
 void Entity::setOnFireFromLava()
 {
 	if (!immuneToFire)
