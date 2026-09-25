@@ -22,7 +22,11 @@ public:
     void resetEquippedProgressAfterItemUse();
 
 private:
+    void emitItemIn2DGeometry(Tessellator* tessellator, float maxU, float minV, float minU, float maxV);
     void renderItemIn2D(Tessellator* tessellator, float maxU, float minV, float minU, float maxV);
+#ifdef PS2_PLATFORM
+    bool renderCachedBowIn2D(Tessellator* tessellator, int icon, float maxU, float minV, float minU, float maxV);
+#endif
     void renderInsideOfBlock(float f, int i);
     void renderWarpedTextureOverlay(float f);
     void renderFireInFirstPerson(float f);
@@ -34,4 +38,8 @@ private:
     RenderBlocks* renderBlocksInstance;
     MapItemRenderer* field_28131_f;
     int field_20099_f;
+#ifdef PS2_PLATFORM
+    int ps2BowMeshHandle;
+    int ps2BowMeshIcon;
+#endif
 };

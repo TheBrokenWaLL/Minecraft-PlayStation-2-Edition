@@ -34,13 +34,24 @@ ItemRenderer::ItemRenderer(Minecraft* minecraft)
     : itemToRender(nullptr)
     , equippedProgress(0.0f)
     , prevEquippedProgress(0.0f)
-    , field_20099_f(-1) {
+    , field_20099_f(-1)
+#ifdef PS2_PLATFORM
+    , ps2BowMeshHandle(0)
+    , ps2BowMeshIcon(-1)
+#endif
+    {
     renderBlocksInstance = new RenderBlocks();
     mc = minecraft;
     field_28131_f = new MapItemRenderer(minecraft->fontRenderer, minecraft->gameSettings, minecraft->renderEngine);
 }
 
 ItemRenderer::~ItemRenderer() {
+#ifdef PS2_PLATFORM
+    if (ps2BowMeshHandle != 0) {
+        renderDestroyPersistentMesh(ps2BowMeshHandle);
+        ps2BowMeshHandle = 0;
+    }
+#endif
     delete renderBlocksInstance;
     delete field_28131_f;
 }
@@ -78,7 +89,12 @@ void ItemRenderer::renderItem(EntityLiving* entityliving, ItemStack* itemstack, 
         renderRotate(50.0f, 0.0f, 1.0f, 0.0f);
         renderRotate(335.0f, 0.0f, 0.0f, 1.0f);
         renderTranslate(-0.9375f, -0.0625f, 0.0f);
-        renderItemIn2D(tessellator, maxU, minV, minU, maxV);
+#ifdef PS2_PLATFORM
+        const bool renderedCachedBow = Item::bow != nullptr && itemstack->itemID == Item::bow->shiftedIndex &&
+            renderCachedBowIn2D(tessellator, icon, maxU, minV, minU, maxV);
+        if (!renderedCachedBow)
+#endif
+            renderItemIn2D(tessellator, maxU, minV, minU, maxV);
 
 #ifndef PS2_PLATFORM
         // Enchantment glint, see RenderItem::renderItemIntoGUI.
@@ -121,27 +137,22 @@ void ItemRenderer::renderItem(EntityLiving* entityliving, ItemStack* itemstack, 
     renderPopMatrix();
 }
 
-void ItemRenderer::renderItemIn2D(Tessellator* tessellator, float maxU, float minV, float minU, float maxV) {
+void ItemRenderer::emitItemIn2DGeometry(Tessellator* tessellator, float maxU, float minV, float minU, float maxV) {
     const float size = 1.0f;
     const float thickness = 0.0625f;
 
-    tessellator->startDrawingQuads();
     tessellator->setNormal(0.0f, 0.0f, 1.0f);
     tessellator->addVertexWithUV(0.0, 0.0, 0.0, maxU, maxV);
     tessellator->addVertexWithUV(size, 0.0, 0.0, minU, maxV);
     tessellator->addVertexWithUV(size, 1.0, 0.0, minU, minV);
     tessellator->addVertexWithUV(0.0, 1.0, 0.0, maxU, minV);
-    tessellator->draw();
 
-    tessellator->startDrawingQuads();
     tessellator->setNormal(0.0f, 0.0f, -1.0f);
     tessellator->addVertexWithUV(0.0, 1.0, -thickness, maxU, minV);
     tessellator->addVertexWithUV(size, 1.0, -thickness, minU, minV);
     tessellator->addVertexWithUV(size, 0.0, -thickness, minU, maxV);
     tessellator->addVertexWithUV(0.0, 0.0, -thickness, maxU, maxV);
-    tessellator->draw();
 
-    tessellator->startDrawingQuads();
     tessellator->setNormal(-1.0f, 0.0f, 0.0f);
     for (int i = 0; i < 16; ++i) {
         float step = static_cast<float>(i) / 16.0f;
@@ -152,9 +163,7 @@ void ItemRenderer::renderItemIn2D(Tessellator* tessellator, float maxU, float mi
         tessellator->addVertexWithUV(x, 1.0, 0.0, u, minV);
         tessellator->addVertexWithUV(x, 1.0, -thickness, u, minV);
     }
-    tessellator->draw();
 
-    tessellator->startDrawingQuads();
     tessellator->setNormal(1.0f, 0.0f, 0.0f);
     for (int i = 0; i < 16; ++i) {
         float step = static_cast<float>(i) / 16.0f;
@@ -165,9 +174,7 @@ void ItemRenderer::renderItemIn2D(Tessellator* tessellator, float maxU, float mi
         tessellator->addVertexWithUV(x, 0.0, 0.0, u, maxV);
         tessellator->addVertexWithUV(x, 0.0, -thickness, u, maxV);
     }
-    tessellator->draw();
 
-    tessellator->startDrawingQuads();
     tessellator->setNormal(0.0f, 1.0f, 0.0f);
     for (int i = 0; i < 16; ++i) {
         float step = static_cast<float>(i) / 16.0f;
@@ -178,9 +185,7 @@ void ItemRenderer::renderItemIn2D(Tessellator* tessellator, float maxU, float mi
         tessellator->addVertexWithUV(size, y, -thickness, minU, v);
         tessellator->addVertexWithUV(0.0, y, -thickness, maxU, v);
     }
-    tessellator->draw();
 
-    tessellator->startDrawingQuads();
     tessellator->setNormal(0.0f, -1.0f, 0.0f);
     for (int i = 0; i < 16; ++i) {
         float step = static_cast<float>(i) / 16.0f;
@@ -191,8 +196,52 @@ void ItemRenderer::renderItemIn2D(Tessellator* tessellator, float maxU, float mi
         tessellator->addVertexWithUV(0.0, y, -thickness, maxU, v);
         tessellator->addVertexWithUV(size, y, -thickness, minU, v);
     }
+}
+
+void ItemRenderer::renderItemIn2D(Tessellator* tessellator, float maxU, float minV, float minU, float maxV) {
+    tessellator->startDrawingQuads();
+    emitItemIn2DGeometry(tessellator, maxU, minV, minU, maxV);
     tessellator->draw();
 }
+
+#ifdef PS2_PLATFORM
+bool ItemRenderer::renderCachedBowIn2D(Tessellator* tessellator, int icon, float maxU, float minV, float minU, float maxV) {
+    if (ps2BowMeshHandle != 0 && ps2BowMeshIcon == icon) {
+        if (renderDrawPersistentMesh(ps2BowMeshHandle))
+            return true;
+        renderDestroyPersistentMesh(ps2BowMeshHandle);
+        ps2BowMeshHandle = 0;
+        ps2BowMeshIcon = -1;
+    }
+
+    if (ps2BowMeshHandle != 0) {
+        renderDestroyPersistentMesh(ps2BowMeshHandle);
+        ps2BowMeshHandle = 0;
+    }
+
+    const int handle = renderCreatePersistentMesh();
+    if (handle == 0)
+        return false;
+
+    tessellator->startDrawingQuads();
+    emitItemIn2DGeometry(tessellator, maxU, minV, minU, maxV);
+    if (!tessellator->finishPersistentMesh(handle)) {
+        tessellator->cancelDrawing();
+        renderDestroyPersistentMesh(handle);
+        return false;
+    }
+
+    ps2BowMeshHandle = handle;
+    ps2BowMeshIcon = icon;
+    if (renderDrawPersistentMesh(ps2BowMeshHandle))
+        return true;
+
+    renderDestroyPersistentMesh(ps2BowMeshHandle);
+    ps2BowMeshHandle = 0;
+    ps2BowMeshIcon = -1;
+    return false;
+}
+#endif
 
 void ItemRenderer::renderItemInFirstPerson(float partialTick) {
     float equipped = prevEquippedProgress + (equippedProgress - prevEquippedProgress) * partialTick;

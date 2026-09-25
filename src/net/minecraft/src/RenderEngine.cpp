@@ -371,9 +371,8 @@ bool RenderEngine::loadTextureStreamInto(const std::string &s, int_t texture, st
 		image = legacyPreparePanoramaForUpload(normalizedPath, std::move(image));
 
 		// Minecraft 1.2.5 player/biped models use 64x32 texture format.
-		// If a modern 64x64 skin texture is loaded, automatically convert it to 64x32
-		// with second-layer overlay compositing and opaque base regions to prevent
-		// texture stretching/distortion on the model.
+		// Convert only player-skin resources: several mob models (notably villagers)
+		// legitimately use 64x64 textures and must retain their full image/UV space.
 		if (image && image->getWidth() == 64 && image->getHeight() == 64)
 		{
 			std::string lowerPath = normalizedPath;
@@ -381,8 +380,7 @@ bool RenderEngine::loadTextureStreamInto(const std::string &s, int_t texture, st
 				c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
 			if (lowerPath.find("skin") != std::string::npos ||
 			    lowerPath.find("char") != std::string::npos ||
-			    lowerPath.find("player") != std::string::npos ||
-			    lowerPath.find("/mob/") != std::string::npos)
+			    lowerPath.find("player") != std::string::npos)
 			{
 				std::vector<unsigned char> srcRgba(BufferedImage::checkedRgbaByteCount(64, 64));
 				image->getRGB(0, 0, 64, 64, srcRgba.data());

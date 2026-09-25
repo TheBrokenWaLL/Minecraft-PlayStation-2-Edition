@@ -145,6 +145,16 @@
 #define PS2_ENTITY_AI_MID_TICK_DIVISOR   2
 #define PS2_ENTITY_AI_FAR_TICK_DIVISOR   4
 
+// Remote mobs in multiplayer are server-authoritative, but vanilla still runs
+// their full local water/lava, movement and block-collision physics every tick
+// after applying network interpolation. Dense villages can therefore spend most
+// of the EE frame re-simulating entities whose position the server immediately
+// corrects. Keep interpolation, base entity timers and animation updates at 20
+// TPS, but refresh the expensive local living-physics path periodically. The
+// phase is staggered by entity ID so a crowd does not refresh on one tick.
+// Must stay a power of two; 1 restores the vanilla per-tick path.
+#define PS2_MULTIPLAYER_REMOTE_LIVING_PHYSICS_TICK_DIVISOR 4
+
 // Living entities beyond the visible terrain window are not worth submitting
 // through the expensive animated-model path. Frustum-exempt entities keep their
 // normal behavior, so bosses and other special renderers are unaffected.

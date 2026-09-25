@@ -1468,6 +1468,27 @@ void EntityLiving::onLivingUpdate()
 			rotationYawHead = rotationYaw;
 		}
 	}
+#if PLATFORM_MULTIPLAYER_REMOTE_LIVING_PHYSICS_TICK_DIVISOR > 1
+	if (worldObj != nullptr && worldObj->multiplayerWorld && isMultiplayerEntity)
+	{
+		constexpr unsigned divisor = PLATFORM_MULTIPLAYER_REMOTE_LIVING_PHYSICS_TICK_DIVISOR;
+		static_assert((divisor & (divisor - 1U)) == 0U,
+			"Remote living physics divisor must be a power of two");
+		const unsigned phase = static_cast<unsigned>(ticksExisted) + static_cast<unsigned>(entityId);
+		if ((phase & (divisor - 1U)) != 0U)
+		{
+			// Network interpolation above remains per-tick. Only the redundant
+			// local physics is skipped; preserve vanilla input damping so a
+			// server velocity/action cannot accumulate between refresh ticks.
+			moveStrafing *= 0.98f;
+			moveForward *= 0.98f;
+			randomYawVelocity *= 0.9f;
+			if (!isJumping)
+				jumpTicks = 0;
+			return;
+		}
+	}
+#endif
 	bool flag  = isInWater();
 	bool flag1 = handleLavaMovement();
 	if (isJumping)
