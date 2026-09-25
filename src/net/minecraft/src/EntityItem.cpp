@@ -70,6 +70,30 @@ void EntityItem::onUpdate()
 	prevPosX = posX;
 	prevPosY = posY;
 	prevPosZ = posZ;
+
+#if PLATFORM_PS2
+	// Multiplayer item positions are server-authoritative. Once an item has
+	// settled, most client ticks only need the base environmental update plus
+	// pickup/despawn bookkeeping; repeating collision resolution every tick is
+	// redundant. Keep one full physics tick out of four so removed support or a
+	// server correction is reflected within 0.2 seconds at 20 TPS. Water/lava
+	// and any meaningful motion always stay on the full path.
+	if (worldObj->multiplayerWorld && onGround && !isInWater() && fire == 0)
+	{
+		const double horizontalMotionSq = motionX * motionX + motionZ * motionZ;
+		const bool nearlyStill = horizontalMotionSq <= 0.0001 &&
+		                         motionY >= -0.03 && motionY <= 0.03;
+		if (nearlyStill && (ticksExisted & 3) != 0)
+		{
+			if (++age >= 6000)
+			{
+				setEntityDead();
+			}
+			return;
+		}
+	}
+#endif
+
 	motionY -= 0.039999999105930328;
 	if (worldObj->getBlockMaterial(MathHelper::floor_double(posX), MathHelper::floor_double(posY), MathHelper::floor_double(posZ)) == Material::lava)
 	{
