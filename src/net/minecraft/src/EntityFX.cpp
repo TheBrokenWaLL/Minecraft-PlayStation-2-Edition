@@ -6,11 +6,13 @@
 
 #include "AxisAlignedBB.h"
 #include "Block.h"
+#include "Chunk.h"
 #include "MathHelper.h"
 #include "NBTTagCompound.h"
 #include "Tessellator.h"
 #include "World.h"
 #include "platform/PlatformTuning.h"
+#include "java/Arithmetic.h"
 
 double EntityFX::interpPosX = 0.0;
 double EntityFX::interpPosY = 0.0;
@@ -121,21 +123,57 @@ void EntityFX::onUpdate()
 #if PLATFORM_FAST_PARTICLE_PHYSICS
 namespace
 {
+// The fast particle path probes up to three nearby points for one movement.
+// They almost always live in the same chunk, so keep that chunk lookup local to
+// the movement instead of walking the provider once per axis. Block ID and
+// collision-shape semantics remain the same as World::getBlockId() for normal
+// in-world coordinates.
+struct ParticleBlockLookup
+{
+	World *world = nullptr;
+	Chunk *chunk = nullptr;
+	int_t chunkX = 0;
+	int_t chunkZ = 0;
+	bool hasChunk = false;
+
+	int_t blockId(int_t blockX, int_t blockY, int_t blockZ)
+	{
+		if (world == nullptr || blockX < -30000000 || blockZ < -30000000 ||
+		    blockX >= 30000000 || blockZ >= 30000000 ||
+		    blockY < 0 || blockY >= WorldHeight::HEIGHT)
+		{
+			return 0;
+		}
+
+		const int_t wantedChunkX = JavaArithmetic::intShr(blockX, 4);
+		const int_t wantedChunkZ = JavaArithmetic::intShr(blockZ, 4);
+		if (!hasChunk || wantedChunkX != chunkX || wantedChunkZ != chunkZ)
+		{
+			chunkX = wantedChunkX;
+			chunkZ = wantedChunkZ;
+			chunk = world->getChunkFromChunkCoords(chunkX, chunkZ);
+			hasChunk = true;
+		}
+
+		return chunk != nullptr ? chunk->getBlockID(blockX & 0xf, blockY, blockZ & 0xf) : 0;
+	}
+};
+
 // True when the point lies inside the collision box of the block at that
 // position. Particles are 0.2 wide, so one point per axis stands in for the
 // AABB sweep Entity::moveEntity performs.
-bool particleBlockedAt(World *world, double x, double y, double z)
+bool particleBlockedAt(ParticleBlockLookup &lookup, double x, double y, double z)
 {
 	const int_t blockX = MathHelper::floor_double(x);
 	const int_t blockY = MathHelper::floor_double(y);
 	const int_t blockZ = MathHelper::floor_double(z);
-	const int_t blockId = world->getBlockId(blockX, blockY, blockZ);
+	const int_t blockId = lookup.blockId(blockX, blockY, blockZ);
 	if (blockId <= 0 || blockId >= Block::BLOCK_REGISTRY_SIZE)
 		return false;
 	Block *block = Block::blocksList[blockId];
 	if (block == nullptr)
 		return false;
-	AxisAlignedBB *box = block->getCollisionBoundingBoxFromPool(world, blockX, blockY, blockZ);
+	AxisAlignedBB *box = block->getCollisionBoundingBoxFromPool(lookup.world, blockX, blockY, blockZ);
 	return box != nullptr &&
 	       x >= box->minX && x < box->maxX &&
 	       y >= box->minY && y < box->maxY &&
@@ -154,6 +192,8 @@ void EntityFX::moveEntity(double d, double d1, double d2)
 	// Same outputs Entity::moveEntity leaves for a particle -- position,
 	// onGround, isCollided*, motion zeroed on the blocked axis -- without the
 	// colliding-box gather, fall tracking or step sounds none of the FX use.
+	ParticleBlockLookup blockLookup;
+	blockLookup.world = worldObj;
 	const double halfWidth = static_cast<double>(width) * 0.5;
 	const double bottom = boundingBox->minY;
 	const double top = boundingBox->maxY;
@@ -163,7 +203,7 @@ void EntityFX::moveEntity(double d, double d1, double d2)
 	if (d1 != 0.0)
 	{
 		const double probeY = d1 < 0.0 ? bottom + d1 : top + d1;
-		blockedY = particleBlockedAt(worldObj, posX, probeY, posZ);
+		blockedY = particleBlockedAt(blockLookup, posX, probeY, posZ);
 	}
 	onGround = blockedY && d1 < 0.0;
 	if (blockedY)
@@ -173,7 +213,7 @@ void EntityFX::moveEntity(double d, double d1, double d2)
 	if (d != 0.0)
 	{
 		const double probeX = posX + d + (d < 0.0 ? -halfWidth : halfWidth);
-		blockedX = particleBlockedAt(worldObj, probeX, midY + d1, posZ);
+		blockedX = particleBlockedAt(blockLookup, probeX, midY + d1, posZ);
 		if (blockedX)
 			d = 0.0;
 	}
@@ -182,7 +222,7 @@ void EntityFX::moveEntity(double d, double d1, double d2)
 	if (d2 != 0.0)
 	{
 		const double probeZ = posZ + d2 + (d2 < 0.0 ? -halfWidth : halfWidth);
-		blockedZ = particleBlockedAt(worldObj, posX + d, midY + d1, probeZ);
+		blockedZ = particleBlockedAt(blockLookup, posX + d, midY + d1, probeZ);
 		if (blockedZ)
 			d2 = 0.0;
 	}

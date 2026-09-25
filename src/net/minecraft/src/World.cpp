@@ -3379,11 +3379,13 @@ void World::updateEntities()
         
         if (!entity->isDead)
         {
-#if PLATFORM_PS2 && MC_LOG_LEVEL > 2
+#if PLATFORM_PS2 && MC_LOG_LEVEL >= 2
             const std::uint32_t entityTickStart = platformProfileRenderPhaseBegin();
 #endif
             updateEntity(entity);
-#if PLATFORM_PS2 && MC_LOG_LEVEL > 2
+#if PLATFORM_PS2 && MC_LOG_LEVEL == 2
+            platformProfileEntityTickWork(entityTickStart, entity);
+#elif PLATFORM_PS2 && MC_LOG_LEVEL > 2
             platformProfileEntityTick(entityTickStart, entity);
 #endif
         }

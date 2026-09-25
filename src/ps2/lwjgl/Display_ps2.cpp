@@ -72,6 +72,22 @@ namespace
         long long gsSwapMaxNs = 0;
         int gsSwapCount = 0;
 
+        // Presentation split. gsSwap above is the whole swapBuffers() call;
+        // these isolate the expensive blocking points inside it so a 15 ms
+        // displayUpdate can be attributed to GS submission, the mandatory
+        // vblank, or the optional extra pacing field(s).
+        long long queueExecSumNs = 0;
+        long long queueExecMaxNs = 0;
+        int queueExecCount = 0;
+        long long mandatoryVsyncSumNs = 0;
+        long long mandatoryVsyncMaxNs = 0;
+        int mandatoryVsyncCount = 0;
+        long long pacingVsyncSumNs = 0;
+        long long pacingVsyncMaxNs = 0;
+        int pacingVsyncCount = 0;
+        long long pacingExtraFields = 0;
+        int pacingMaxExtraFields = 0;
+
         long long chunkBuildSumNs = 0;
         long long chunkBuildMaxNs = 0;
         int chunkBuildCount = 0;
@@ -364,6 +380,12 @@ extern "C" void ps2_perf_format_and_reset(char* out, int outSize)
     const float frameMax = ps2_perf_ms(s_perf.frameMaxNs);
     const float gsAvg = ps2_perf_avg_ms(s_perf.gsSwapSumNs, s_perf.gsSwapCount);
     const float gsMax = ps2_perf_ms(s_perf.gsSwapMaxNs);
+    const float queueExecAvg = ps2_perf_avg_ms(s_perf.queueExecSumNs, s_perf.queueExecCount);
+    const float queueExecMax = ps2_perf_ms(s_perf.queueExecMaxNs);
+    const float mandatoryVsyncAvg = ps2_perf_avg_ms(s_perf.mandatoryVsyncSumNs, s_perf.mandatoryVsyncCount);
+    const float mandatoryVsyncMax = ps2_perf_ms(s_perf.mandatoryVsyncMaxNs);
+    const float pacingVsyncAvg = ps2_perf_avg_ms(s_perf.pacingVsyncSumNs, s_perf.pacingVsyncCount);
+    const float pacingVsyncMax = ps2_perf_ms(s_perf.pacingVsyncMaxNs);
     const float chunkAvg = ps2_perf_avg_ms(s_perf.chunkBuildSumNs, s_perf.chunkBuildCount);
     const float chunkMax = ps2_perf_ms(s_perf.chunkBuildMaxNs);
     const float tickAvg = ps2_perf_avg_ms(s_perf.tickSumNs, s_perf.tickFrameCount);
@@ -388,6 +410,22 @@ extern "C" void ps2_perf_format_and_reset(char* out, int outSize)
              lightAvg, lightMax,
              gsAvg, gsMax, gsPct,
              s_perf.chunkBuildCount, chunkAvg, chunkMax, s_perf.chunkBuildVerts);
+
+#if MC_LOG_LEVEL >= 2
+    {
+        const float avgExtraFields = s_perf.pacingVsyncCount > 0
+            ? static_cast<float>(s_perf.pacingExtraFields) / static_cast<float>(s_perf.pacingVsyncCount)
+            : 0.0f;
+        size_t len = strlen(out);
+        if (len < (size_t)outSize)
+        {
+            snprintf(out + len, (size_t)outSize - len,
+                " | present exec=%.1f/max%.1f vblank=%.1f/max%.1f pace=%.1f/max%.1f fields=%.2f/max%d",
+                queueExecAvg, queueExecMax, mandatoryVsyncAvg, mandatoryVsyncMax,
+                pacingVsyncAvg, pacingVsyncMax, avgExtraFields, s_perf.pacingMaxExtraFields);
+        }
+    }
+#endif
 
 #if MC_LOG_LEVEL > 2
     if (s_perf.frameSampleCount > 0)
@@ -711,7 +749,15 @@ void swapBuffers()
     ps2_gs_queue_report(s_frame);
 
     MC_LOG_TRACE("frame", "[PS2] frame %ld: gs queue exec\n", s_frame);
+#if MC_LOG_LEVEL >= 2
+    const std::uint64_t queueExecStartUs = PlatformCompat::getMonotonicMicros();
+#endif
     gsKit_queue_exec(gsGlobal);
+#if MC_LOG_LEVEL >= 2
+    const std::uint64_t queueExecEndUs = PlatformCompat::getMonotonicMicros();
+    ps2_perf_add_sample(static_cast<long long>(queueExecEndUs - queueExecStartUs) * 1000LL,
+                        s_perf.queueExecSumNs, s_perf.queueExecMaxNs, s_perf.queueExecCount);
+#endif
     const int activeBeforeFlip = (int)gsGlobal->ActiveBuffer;
     const int contextBeforeFlip = (int)gsGlobal->PrimContext;
     const int firstBeforeFlip = (int)gsGlobal->FirstFrame;
@@ -741,14 +787,39 @@ void swapBuffers()
     // extra fields -- the ones that pace the field rate down to the target --
     // are dropped when the frame overran its budget, so a heavy frame presents
     // at the next vblank instead of halving the rate.
+#if MC_LOG_LEVEL >= 2
+    const std::uint64_t mandatoryVsyncStartUs = PlatformCompat::getMonotonicMicros();
+#endif
     gsKit_vsync_wait();
+#if MC_LOG_LEVEL >= 2
+    const std::uint64_t mandatoryVsyncEndUs = PlatformCompat::getMonotonicMicros();
+    ps2_perf_add_sample(static_cast<long long>(mandatoryVsyncEndUs - mandatoryVsyncStartUs) * 1000LL,
+                        s_perf.mandatoryVsyncSumNs, s_perf.mandatoryVsyncMaxNs, s_perf.mandatoryVsyncCount);
+    long long pacingWaitNs = 0;
+    int extraFieldsWaited = 0;
+#endif
     for (int field = 1; field < s_fieldsPerFrame; ++field)
     {
         const std::uint64_t nowUs = PlatformCompat::getMonotonicMicros();
         if (!Ps2FramePacingPolicy::shouldWaitForTarget(s_lastPresentUs, nowUs, periodUs))
             break;
+#if MC_LOG_LEVEL >= 2
+        const std::uint64_t pacingVsyncStartUs = PlatformCompat::getMonotonicMicros();
+#endif
         gsKit_vsync_wait();
+#if MC_LOG_LEVEL >= 2
+        const std::uint64_t pacingVsyncEndUs = PlatformCompat::getMonotonicMicros();
+        pacingWaitNs += static_cast<long long>(pacingVsyncEndUs - pacingVsyncStartUs) * 1000LL;
+        ++extraFieldsWaited;
+#endif
     }
+#if MC_LOG_LEVEL >= 2
+    ps2_perf_add_sample(pacingWaitNs,
+                        s_perf.pacingVsyncSumNs, s_perf.pacingVsyncMaxNs, s_perf.pacingVsyncCount);
+    s_perf.pacingExtraFields += extraFieldsWaited;
+    if (extraFieldsWaited > s_perf.pacingMaxExtraFields)
+        s_perf.pacingMaxExtraFields = extraFieldsWaited;
+#endif
 
     // gsKit_sync_flip is not "wait then setactive": its own source (ee/gs/src/
     // gsCore.c) does the actual display flip itself, inline, before delegating

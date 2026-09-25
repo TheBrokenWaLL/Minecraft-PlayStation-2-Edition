@@ -37,6 +37,9 @@ static_assert(sizeof(kLoadNames) / sizeof(kLoadNames[0]) ==
 EntitySample s_entities[kEntitySlots];
 int s_entityCount = 0;
 Sample s_overflow;
+EntitySample s_tickEntities[kEntitySlots];
+int s_tickEntityCount = 0;
+Sample s_tickOverflow;
 
 // One slot per decoration stage. Slots are keyed by the name pointer the caller
 // passed, so BiomeDecorator's stage list stays the only place the stages are
@@ -138,6 +141,37 @@ void platformProfileEntityDraw(std::uint32_t start, Entity *entity)
     add(slot.sample, elapsed);
 }
 
+void platformProfileEntityTickWork(std::uint32_t start, Entity *entity)
+{
+    // Same low-overhead type attribution as entity draw profiling, but for the
+    // per-world-tick update. This stays in the level-2 profiler so ocean/frame
+    // captures can identify the expensive entity class without enabling the
+    // much heavier extended profiler.
+    const std::uint32_t elapsed = platformProfileRenderPhaseBegin() - start;
+    if (entity == nullptr)
+        return;
+    const std::type_info &type = typeid(*entity);
+    for (int i = 0; i < s_tickEntityCount; ++i)
+    {
+        if (*s_tickEntities[i].type == type)
+        {
+            add(s_tickEntities[i].sample, elapsed);
+            return;
+        }
+    }
+    if (s_tickEntityCount == kEntitySlots)
+    {
+        add(s_tickOverflow, elapsed);
+        return;
+    }
+    EntitySample &slot = s_tickEntities[s_tickEntityCount++];
+    slot.type = &type;
+    const std::string name = EntityList::getEntityString(entity);
+    std::snprintf(slot.name, sizeof(slot.name), "%s",
+                  name.empty() ? (entity->isPlayer() ? "Player" : type.name()) : name.c_str());
+    add(slot.sample, elapsed);
+}
+
 void platformLogWorkProfileAndReset(int frame)
 {
     for (int i = 0; i < static_cast<int>(PlatformLoadWork::Count); ++i)
@@ -168,6 +202,29 @@ void platformLogWorkProfileAndReset(int frame)
     }
     report(frame, "entity", "Other", other);
     s_overflow = Sample();
+
+    int tickOrder[kEntitySlots];
+    for (int i = 0; i < s_tickEntityCount; ++i)
+        tickOrder[i] = i;
+    std::sort(tickOrder, tickOrder + s_tickEntityCount, [](int a, int b) {
+        return s_tickEntities[a].sample.cycles > s_tickEntities[b].sample.cycles;
+    });
+    Sample tickOther = s_tickOverflow;
+    for (int i = 0; i < s_tickEntityCount; ++i)
+    {
+        EntitySample &slot = s_tickEntities[tickOrder[i]];
+        if (i < kReportedEntities)
+            report(frame, "entityTick", slot.name, slot.sample);
+        else
+        {
+            tickOther.cycles += slot.sample.cycles;
+            tickOther.count += slot.sample.count;
+            tickOther.maxCycles = std::max(tickOther.maxCycles, slot.sample.maxCycles);
+        }
+        slot.sample = Sample();
+    }
+    report(frame, "entityTick", "Other", tickOther);
+    s_tickOverflow = Sample();
 
     int decorOrder[kDecorSlots];
     for (int i = 0; i < s_decorCount; ++i)
