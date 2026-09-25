@@ -399,6 +399,14 @@
 // headroom while covering the whole grid; frustum/pass tests still reject work.
 #define PS2_MAX_RENDERED_SECTIONS_PER_PASS 80
 
+// Dense underwater fog makes distant translucent terrain almost invisible, but
+// the normal section loop still submits every frustum-visible water section.
+// With the vanilla water fog density of 0.1, a point 32 blocks away contributes
+// only about 4% before blending with the fog colour. Cull only sections whose
+// nearest point is beyond that distance, and only while the normal dense-water
+// fog is active. Clear Water and Water Breathing deliberately bypass this cut.
+#define PS2_UNDERWATER_TRANSLUCENT_CULL_DISTANCE 32.0f
+
 // Chunk renderer meshing is the main source of PS2 hitching.  A full
 // 16x16x16 section build can take a visible chunk of one frame, so the PS2
 // WorldRenderer builds a dirty section in small batches and swaps the finished

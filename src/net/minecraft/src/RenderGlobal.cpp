@@ -28,6 +28,7 @@
 #include "platform/RenderTerrainStaging.h"
 #include "client/Minecraft.h"
 #include "Config.h"
+#include "ActiveRenderInfo.h"
 #include "CustomColorizer.h"
 #include "Block.h"
 #include "BlockLeaves.h"
@@ -35,6 +36,7 @@
 #include "EntityLiving.h"
 #include "EntityPlayer.h"
 #include "EntityPlayerSP.h"
+#include "Potion.h"
 #include "EntityRenderer.h"
 #include "EffectRenderer.h"
 #include "EntityBubbleFX.h"
@@ -117,6 +119,27 @@ inline void applyPs2LegacyAtmosphereRgb(Minecraft *mc, float &red, float &green,
 	(void)blue;
 #endif
 }
+
+#if PLATFORM_PS2
+inline bool ps2SectionBeyondTranslucentFog(WorldRenderer *renderer,
+	float eyeX, float eyeY, float eyeZ, float distance)
+{
+	if (renderer == nullptr)
+		return false;
+
+	const float minX = static_cast<float>(renderer->posX);
+	const float minY = static_cast<float>(renderer->posY);
+	const float minZ = static_cast<float>(renderer->posZ);
+	const float maxX = minX + static_cast<float>(renderer->sizeWidth);
+	const float maxY = minY + static_cast<float>(renderer->sizeHeight);
+	const float maxZ = minZ + static_cast<float>(renderer->sizeDepth);
+
+	const float dx = eyeX < minX ? minX - eyeX : (eyeX > maxX ? eyeX - maxX : 0.0f);
+	const float dy = eyeY < minY ? minY - eyeY : (eyeY > maxY ? eyeY - maxY : 0.0f);
+	const float dz = eyeZ < minZ ? minZ - eyeZ : (eyeZ > maxZ ? eyeZ - maxZ : 0.0f);
+	return dx * dx + dy * dy + dz * dz > distance * distance;
+}
+#endif
 }
 
 RenderGlobal::RenderGlobal(Minecraft *minecraft, RenderEngine *renderengine)
@@ -1420,6 +1443,57 @@ int_t RenderGlobal::renderSortedRenderers(int_t i, int_t j, int_t k, double d)
 	const bool useOcclusion = false;
 #endif
 
+	EntityLiving *entityliving = mc->renderViewEntity;
+#if PLATFORM_PS2
+	bool ps2CullTranslucentByFog = false;
+	float ps2TranslucentCullDistance = 0.0f;
+	float ps2FogEyeX = 0.0f;
+	float ps2FogEyeY = 0.0f;
+	float ps2FogEyeZ = 0.0f;
+	if (k == 1 && entityliving != nullptr)
+	{
+		const int_t viewBlockId = mc != nullptr && mc->theWorld != nullptr
+			? ActiveRenderInfo::getBlockIdAtEntityViewpoint(mc->theWorld, entityliving, static_cast<float>(d))
+			: 0;
+		Material *viewMaterial = viewBlockId > 0 && viewBlockId < Block::BLOCK_REGISTRY_SIZE &&
+			Block::blocksList[viewBlockId] != nullptr
+			? Block::blocksList[viewBlockId]->blockMaterial : nullptr;
+
+		if (viewMaterial == Material::water)
+		{
+			// Match EntityRenderer's dense underwater fog. Clear Water and Water
+			// Breathing extend visibility enough that the fixed 32-block cutoff
+			// would become visible, so keep the full pass in those cases.
+			ps2CullTranslucentByFog = !Config::isClearWater() &&
+				!entityliving->isPotionActive(Potion::waterBreathing);
+			ps2TranslucentCullDistance = PS2_UNDERWATER_TRANSLUCENT_CULL_DISTANCE;
+		}
+		else if (mc != nullptr && mc->theWorld != nullptr && mc->theWorld->worldProvider != nullptr &&
+			!mc->theWorld->worldProvider->isNether && !Config::isFogOff())
+		{
+			// On the PS2 fixed-grid renderer, EntityRenderer clamps normal
+			// linear fog to the loaded edge. Sections whose entire AABB is past
+			// that edge are fully fogged already, so submitting their expensive
+			// translucent geometry cannot affect the final image. This matters
+			// most while flying over large oceans, where pass 1 otherwise walks
+			// many diagonal/deep sections that are hidden by fog.
+			ps2CullTranslucentByFog = true;
+			ps2TranslucentCullDistance = static_cast<float>(PLATFORM_VISIBLE_CHUNK_RADIUS * 16);
+		}
+
+		if (ps2CullTranslucentByFog)
+		{
+			ps2FogEyeX = static_cast<float>(entityliving->lastTickPosX +
+				(entityliving->posX - entityliving->lastTickPosX) * d);
+			ps2FogEyeY = static_cast<float>(entityliving->lastTickPosY +
+				(entityliving->posY - entityliving->lastTickPosY) * d +
+				static_cast<double>(entityliving->getEyeHeight()));
+			ps2FogEyeZ = static_cast<float>(entityliving->lastTickPosZ +
+				(entityliving->posZ - entityliving->lastTickPosZ) * d);
+		}
+	}
+#endif
+
 	int_t l = 0;
 	for (int_t i1 = i; i1 < j; i1++)
 	{
@@ -1456,6 +1530,15 @@ int_t RenderGlobal::renderSortedRenderers(int_t i, int_t j, int_t k, double d)
 			(useOcclusion && !sortedRenderer->isVisible))
 			continue;
 
+#if PLATFORM_PS2
+		if (ps2CullTranslucentByFog &&
+			ps2SectionBeyondTranslucentFog(sortedRenderer, ps2FogEyeX, ps2FogEyeY, ps2FogEyeZ,
+				ps2TranslucentCullDistance))
+		{
+			continue;
+		}
+#endif
+
 #if PLATFORM_PS2 || defined(WII_PLATFORM)
 		// Native console terrain uses the renderer itself as the draw contract.
 		// Visibility/pass checks above are sufficient; Wii resolves a GX handle
@@ -1472,7 +1555,6 @@ int_t RenderGlobal::renderSortedRenderers(int_t i, int_t j, int_t k, double d)
 #endif
 	}
 
-	EntityLiving *entityliving = mc->renderViewEntity;
 	double d1 = entityliving->lastTickPosX + (entityliving->posX - entityliving->lastTickPosX) * d;
 	double d2 = entityliving->lastTickPosY + (entityliving->posY - entityliving->lastTickPosY) * d;
 	double d3 = entityliving->lastTickPosZ + (entityliving->posZ - entityliving->lastTickPosZ) * d;

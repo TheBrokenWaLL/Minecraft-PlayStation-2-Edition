@@ -2320,10 +2320,6 @@ void RenderBlocks::renderCropsCrossed(Block *block, int_t i, tess_coord_t d, tes
 bool RenderBlocks::renderBlockFluids(Block *block, int_t i, int_t j, int_t k)
 {
 	Tessellator *tessellator = &Tessellator::instance;
-	int_t l = CustomColorizer::getFluidColor(block, blockAccess, i, j, k);
-	float f = (float)(l >> 16 & 0xff) / 255.0f;
-	float f1 = (float)(l >> 8 & 0xff) / 255.0f;
-	float f2 = (float)(l & 0xff) / 255.0f;
 	bool flag = shouldRenderFace(block, i, j + 1, k, 1);
 	bool flag1 = shouldRenderFace(block, i, j - 1, k, 0);
 	bool aflag[4];
@@ -2335,6 +2331,14 @@ bool RenderBlocks::renderBlockFluids(Block *block, int_t i, int_t j, int_t k)
 	{
 		return false;
 	}
+
+	// Fluid tinting can involve a 3x3 biome sample. Do it only after proving
+	// that at least one face will be emitted; fully enclosed water is common in
+	// deep ocean sections and otherwise pays that cost just before returning.
+	int_t l = CustomColorizer::getFluidColor(block, blockAccess, i, j, k);
+	float f = (float)(l >> 16 & 0xff) / 255.0f;
+	float f1 = (float)(l >> 8 & 0xff) / 255.0f;
+	float f2 = (float)(l & 0xff) / 255.0f;
 	bool flag2 = false;
 	float f3 = 0.5f;
 	float f4 = 1.0f;

@@ -18,10 +18,24 @@ enum class PlatformLoadWork
     Count
 };
 
+enum class PlatformMeshWork
+{
+    CacheSetup,
+    Greedy,
+    ScanSetup,
+    BlockScan,
+    Capture,
+    FaceSort,
+    Pack,
+    Commit,
+    Count
+};
+
 #if PLATFORM_PS2 && MC_LOG_LEVEL >= 2
 void platformProfileLoadWork(std::uint32_t start, PlatformLoadWork work);
 void platformProfileEntityDraw(std::uint32_t start, Entity *entity);
 void platformProfileEntityTickWork(std::uint32_t start, Entity *entity);
+void platformProfileMeshWork(std::uint32_t start, PlatformMeshWork work);
 // Attributed by NAME POINTER, not by an enum, so the caller's stage list stays
 // the single definition of what the stages are. Callers must pass a string
 // literal or other stable address: slots are matched by pointer identity, the
@@ -42,6 +56,7 @@ void platformLogWorkProfileAndReset(int frame);
 inline void platformProfileLoadWork(std::uint32_t, PlatformLoadWork) {}
 inline void platformProfileEntityDraw(std::uint32_t, Entity *) {}
 inline void platformProfileEntityTickWork(std::uint32_t, Entity *) {}
+inline void platformProfileMeshWork(std::uint32_t, PlatformMeshWork) {}
 inline void platformProfileDecorWork(std::uint32_t, const char *) {}
 inline void platformProfilePopulationBlockWrite() {}
 inline void platformLogWorkProfileAndReset(int) {}

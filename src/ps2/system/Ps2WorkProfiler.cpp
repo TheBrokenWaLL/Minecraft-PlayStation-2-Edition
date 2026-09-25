@@ -34,6 +34,13 @@ const char *const kLoadNames[] = {
 };
 static_assert(sizeof(kLoadNames) / sizeof(kLoadNames[0]) ==
               static_cast<int>(PlatformLoadWork::Count), "Load profile names must match phases");
+Sample s_mesh[static_cast<int>(PlatformMeshWork::Count)];
+const char *const kMeshNames[] = {
+    "cacheSetup", "greedy", "scanSetup", "blockScan",
+    "capture", "faceSort", "pack", "commit"
+};
+static_assert(sizeof(kMeshNames) / sizeof(kMeshNames[0]) ==
+              static_cast<int>(PlatformMeshWork::Count), "Mesh profile names must match phases");
 EntitySample s_entities[kEntitySlots];
 int s_entityCount = 0;
 Sample s_overflow;
@@ -82,6 +89,14 @@ void platformProfileLoadWork(std::uint32_t start, PlatformLoadWork work)
     const int index = static_cast<int>(work);
     if (index >= 0 && index < static_cast<int>(PlatformLoadWork::Count))
         add(s_load[index], elapsed);
+}
+
+void platformProfileMeshWork(std::uint32_t start, PlatformMeshWork work)
+{
+    const std::uint32_t elapsed = platformProfileRenderPhaseBegin() - start;
+    const int index = static_cast<int>(work);
+    if (index >= 0 && index < static_cast<int>(PlatformMeshWork::Count))
+        add(s_mesh[index], elapsed);
 }
 
 void platformProfileDecorWork(std::uint32_t start, const char *stage)
@@ -178,6 +193,12 @@ void platformLogWorkProfileAndReset(int frame)
     {
         report(frame, "load", kLoadNames[i], s_load[i]);
         s_load[i] = Sample();
+    }
+
+    for (int i = 0; i < static_cast<int>(PlatformMeshWork::Count); ++i)
+    {
+        report(frame, "meshWork", kMeshNames[i], s_mesh[i]);
+        s_mesh[i] = Sample();
     }
 
     int order[kEntitySlots];
