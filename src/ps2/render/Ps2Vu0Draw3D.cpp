@@ -831,6 +831,28 @@ bool ps2_draw_3d(const Ps2Draw3DState& state) {
             return;
         }
 #endif
+#ifdef PS2_MERGE_WATER_TOPS
+        if (terrainTranslucent && state.quads && state.tileAtlas && !state.ortho &&
+            !currentQuadClampValid) {
+            // A merged top repeats the original tile twice along U. Clipping
+            // can move a triangle's minimum into the second repeat, so retain
+            // the source quad's tile for both triangles and all clipped fans.
+            for (int i = 0; i < 4; ++i) {
+                if (!uevValid[i]) {
+                    fetchEmit(usrc[i], uev[i]);
+                    uevValid[i] = true;
+                }
+            }
+            if (uev[0].u == uev[1].u && uev[2].u == uev[3].u &&
+                uev[0].v == uev[3].v && uev[1].v == uev[2].v &&
+                uev[2].u - uev[0].u == 2.0f / 16.0f &&
+                uev[1].v - uev[0].v == 1.0f / 16.0f) {
+                currentQuadClamp = ps2_select_clamp(texW, texH, false, true,
+                    uev[0].u * texW, uev[0].v * texH, 0.0f, 0.0f);
+                currentQuadClampValid = true;
+            }
+        }
+#endif
         emitQuadTri(0, 1, 2);
         emitQuadTri(0, 2, 3);
     };

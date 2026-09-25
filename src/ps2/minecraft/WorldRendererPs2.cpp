@@ -31,6 +31,9 @@
 #include "ps2/render/Ps2BlockRenderInfo.h"
 #include "ps2/render/Ps2CubeFaceMask.h"
 #include "ps2/render/Ps2GreedyMesh.h"
+#ifdef PS2_MERGE_WATER_TOPS
+#include "ps2/render/Ps2WaterSurfaceMerge.h"
+#endif
 #include "ps2/render/Ps2MeshStagingPool.h"
 #include "ps2/render/Ps2SectionVisibility.h"
 
@@ -849,6 +852,23 @@ bool WorldRenderer::ps2BuildRendererStep(int_t blockBudget)
 			if (compactTerrainLayout && (stepRaw.size() % slots) == 0u &&
 				(size_t)stepVerts <= stepRaw.size() / slots)
 			{
+#ifdef PS2_MERGE_WATER_TOPS
+                if (ps2BuildPass == 1 && stepTex && stepCol &&
+                    stepMode == 7 && Block::waterStill != nullptr)
+                {
+                    const unsigned beforeQuads = (unsigned)(stepRaw.size() / 24u);
+                    const unsigned merged = ps2MergeWaterTopPairs(stepRaw,
+                        Block::waterStill->getBlockTextureFromSide(1),
+                        [&](int lx, int ly, int lz) {
+                            return chunkcache.getBlockId(posX+lx, posY+ly, posZ+lz) ==
+                                Block::waterStill->blockID &&
+                                chunkcache.getBlockMetadata(posX+lx, posY+ly, posZ+lz) == 0;
+                        });
+                    if (merged != 0)
+                        MC_LOG_DEBUG("render", "[PS2] water merge: inputQuads=%u mergedPairs=%u outputQuads=%u\n",
+                            beforeQuads, merged, beforeQuads-merged);
+                }
+#endif
 				stepVerts = (int_t)(stepRaw.size() / slots);
 				// Non-null: the build is active, so the lease is held.
 				std::vector<int_t> &dst = ps2BuildBuffers()[ps2BuildPass];
