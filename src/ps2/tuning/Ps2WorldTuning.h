@@ -588,12 +588,15 @@
 // path. A single job remains atomic, so this cannot leave a half-updated box.
 #define PS2_LIGHTING_UPDATES_PER_FRAME 128 // vanilla 500
 // When the queue is at most QUEUE_MAX jobs at drain start it is interactive
-// work (a torch, a dug block), not streaming, and the drain may run BURST jobs
-// ignoring PS2_LIGHTING_BUDGET_US so the light settles in one frame. A torch is
-// ~1000 cells, ~1-2 ms with the direct section reads in MetadataChunkBlock.
+// work (a torch, a dug block), not streaming, and the drain may raise its job
+// cap to BURST. Keep a separate wall-clock ceiling for this path: an open-area
+// skylight column can make one "small" queue surprisingly expensive, and the
+// old unlimited burst produced 30-40 ms light spikes on hardware. 4 ms keeps
+// local edits responsive without letting lighting monopolize a 33.3 ms frame.
 #define PS2_LIGHTING_INTERACTIVE_QUEUE_MAX 256
 #define PS2_LIGHTING_INTERACTIVE_BURST     2048
-#define PS2_LIGHTING_BUDGET_US         2500
+#define PS2_LIGHTING_BUDGET_US             2500
+#define PS2_LIGHTING_INTERACTIVE_BUDGET_US 4000
 // Vanilla only probes the five newest jobs for overlap. Chunk generation on PS2
 // can enqueue tens of thousands of nearly-identical light boxes, so scan a
 // wider tail before allocating another MetadataChunkBlock. The hard cap prevents pathological propagation storms from consuming the

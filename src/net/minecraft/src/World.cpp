@@ -4246,19 +4246,19 @@ bool World::updatingLighting()
         if (interactiveBurst && count < PLATFORM_LIGHTING_INTERACTIVE_BURST)
             count = PLATFORM_LIGHTING_INTERACTIVE_BURST;
 
-        // Wall-clock ceiling on top of that count.  One job here is a flood fill
-        // over a box, so the count alone bounds the number of jobs but not the
-        // frame; see PLATFORM_LIGHTING_BUDGET_US.  Read once, and only when the
-        // budget is enabled, so the profiles that leave it at 0 keep the
-        // original loop.
-        const uint64_t budgetStartUs = PLATFORM_LIGHTING_BUDGET_US > 0
+        // Wall-clock ceiling on top of that count. One job here is a flood fill
+        // over a box, so the count alone does not bound a frame. Interactive
+        // drains get a little more time than streaming lighting, but are still
+        // bounded; the previous unlimited burst caused tens-of-ms stalls when a
+        // short queue contained expensive open-area skylight columns.
+        const long_t requestedLightingBudgetUs = interactiveBurst
+            ? (long_t)PLATFORM_LIGHTING_INTERACTIVE_BUDGET_US
+            : (long_t)PLATFORM_LIGHTING_BUDGET_US;
+        const uint64_t budgetStartUs = requestedLightingBudgetUs > 0
             ? PlatformCompat::getMonotonicMicros()
             : 0;
-        // Clamped to the shared streaming allowance of this frame; the
-        // interactive burst below ignores it the same way it ignores the
-        // per-call ceiling.
-        const uint64_t budgetUs = PLATFORM_LIGHTING_BUDGET_US > 0
-            ? (uint64_t)PlatformStreamingFrameBudget::clampUs((long_t)PLATFORM_LIGHTING_BUDGET_US)
+        const uint64_t budgetUs = requestedLightingBudgetUs > 0
+            ? (uint64_t)PlatformStreamingFrameBudget::clampUs(requestedLightingBudgetUs)
             : 0;
         PlatformStreamingFrameBudgetScope frameBudgetScope;
 
@@ -4303,7 +4303,7 @@ bool World::updatingLighting()
             // protocol: the per-frame caller comes back next frame and the
             // preload drain (Minecraft::preloadWorld) simply re-enters and
             // starts a fresh budget until the queue is empty.
-            if (PLATFORM_LIGHTING_BUDGET_US > 0 && !interactiveBurst)
+            if (budgetUs > 0)
             {
                 const uint64_t nowUs = PlatformCompat::getMonotonicMicros();
                 if (nowUs > budgetStartUs &&
