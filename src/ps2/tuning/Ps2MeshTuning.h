@@ -501,11 +501,9 @@
 #define PS2_PARTICLE_BRIGHTNESS_INTERVAL 4
 #define PS2_BLOCK_DESTROY_PARTICLE_GRID 2
 #define PS2_MAX_PARTICLES_PER_LAYER 128
-// The full rain/snow curtains are already disabled below, but vanilla still
-// spawns up to 100 ground-impact EntityRainFX objects every tick. Their average
-// lifetime keeps many alpha-tested quads alive around the camera. Two attempts
-// per tick still provide continuous splashes (~40 attempts/second at 20 TPS)
-// while halving the source rate that feeds the effects tick and particle draw.
+// Bound ground-impact particles separately from the weather curtains and sound.
+// Two attempts per tick (~40/second at 20 TPS) limit allocation and overdraw;
+// ambience still samples nearby surfaces when splashes/particles are disabled.
 #define PS2_RAIN_SPLASH_PARTICLES_PER_TICK 2
 // Entity::isBurning() draws a stack of heavily overlapping fire billboards. A
 // normal zombie produces about five layers with vanilla's 0.45 step. Keep three

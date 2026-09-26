@@ -1941,13 +1941,18 @@ void EntityRenderer::renderWorld(float partialTicks, int64_t renderTimeLimitNano
 void EntityRenderer::addRainParticles()
 {
     float rainStrength = mc->theWorld->getRainStrength(1.0f);
+#if PLATFORM_PS2
+    const float soundStrength = rainStrength;
+#endif
     if (!Config::isRainFancy())
         rainStrength /= 2.0f;
 
     if (rainStrength == 0.0f)
         return;
+#if !PLATFORM_PS2
     if (!Config::isRainSplash())
         return;
+#endif
 
     random.setSeed(static_cast<long_t>(rendererUpdateCount) * 312987231LL);
 
@@ -1963,9 +1968,8 @@ void EntityRenderer::addRainParticles()
     int_t rainParticleCount = 0;
     int_t particleCount = static_cast<int_t>(100.0f * rainStrength * rainStrength);
 #if PLATFORM_PS2
-    // PS2 does not draw the full weather curtains, but this splash path still
-    // ran the vanilla 100-attempt burst every tick. Bound it before applying the
-    // user's particle setting so "Decreased" still halves the console budget.
+    // Bound allocations before applying the user's particle setting.
+    // Ambient sound sampling below has its own small, allocation-free budget.
     if (particleCount > PS2_RAIN_SPLASH_PARTICLES_PER_TICK)
         particleCount = PS2_RAIN_SPLASH_PARTICLES_PER_TICK;
 #endif
@@ -1975,7 +1979,16 @@ void EntityRenderer::addRainParticles()
     else if (mc->gameSettings->particleSetting == 2)
         particleCount = 0;
 
-    for (int_t i = 0; i < particleCount; ++i)
+#if PLATFORM_PS2
+    if (!Config::isRainSplash())
+        particleCount = 0;
+    // Minimal particles/splashes-off must not mute weather. Two surface probes
+    // per tick suffice for ambience and do not allocate particles themselves.
+    const int_t sampleCount = std::max(particleCount, 2);
+#else
+    const int_t sampleCount = particleCount;
+#endif
+    for (int_t i = 0; i < sampleCount; ++i)
     {
         const int_t x = random.nextIntOffset(centerX, range);
         const int_t z = random.nextIntOffset(centerZ, range);
@@ -2001,6 +2014,9 @@ void EntityRenderer::addRainParticles()
         const double particleY = static_cast<double>(static_cast<float>(precipitationY) + 0.1f) - blockBelow->minY;
         if (blockBelow->blockMaterial == Material::lava)
         {
+#if PLATFORM_PS2
+            if (i < particleCount)
+#endif
             mc->effectRenderer->addEffect(new EntitySmokeFX(
                 world, static_cast<double>(static_cast<float>(x) + offsetX), particleY,
                 static_cast<double>(static_cast<float>(z) + offsetZ), 0.0, 0.0, 0.0));
@@ -2015,6 +2031,9 @@ void EntityRenderer::addRainParticles()
                 soundZ = static_cast<double>(static_cast<float>(z) + offsetZ);
             }
 
+#if PLATFORM_PS2
+            if (i < particleCount)
+#endif
             mc->effectRenderer->addEffect(new EntityRainFX(
                 world, static_cast<double>(static_cast<float>(x) + offsetX), particleY,
                 static_cast<double>(static_cast<float>(z) + offsetZ)));
@@ -2024,16 +2043,21 @@ void EntityRenderer::addRainParticles()
     if (rainParticleCount > 0 && random.nextInt(3) < rainSoundCounter++)
     {
         rainSoundCounter = 0;
+#if PLATFORM_PS2
+        const float soundGain = soundStrength;
+#else
+        const float soundGain = 1.0f;
+#endif
         if (soundY > entity->posY + 1.0 &&
             world->getPrecipitationHeight(MathHelper::floor_double(entity->posX),
                                           MathHelper::floor_double(entity->posZ)) >
                 MathHelper::floor_double(entity->posY))
         {
-            world->playSoundEffect(soundX, soundY, soundZ, "ambient.weather.rain", 0.1f, 0.5f);
+            world->playSoundEffect(soundX, soundY, soundZ, "ambient.weather.rain", 0.1f * soundGain, 0.5f);
         }
         else
         {
-            world->playSoundEffect(soundX, soundY, soundZ, "ambient.weather.rain", 0.2f, 1.0f);
+            world->playSoundEffect(soundX, soundY, soundZ, "ambient.weather.rain", 0.2f * soundGain, 1.0f);
         }
     }
 }

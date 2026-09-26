@@ -482,24 +482,15 @@ add_custom_target(ps2-data
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CMAKE_SOURCE_DIR}/data/resources_ps2" "${PS2_APP_DIR}/data/resources"
 
-    # Audio that is deliberately not shipped. This used to be about ELF size;
-    # now the cost is SPU2 memory, which is 2 MB and has no eviction here --
-    # ps2GetAdpcmSample() uploads a sample on first play and never unloads it.
-    #
-    #     newsound/ambient   1141 KB   cave ambience + rain/thunder beds
-    #     sound/loops         ~2 MB    C418 ocean/cave/bird loops
-    #
-    # Neither is reachable often enough to be worth that budget:
-    # World::updateBlocksAndPlayCaveSounds reseeds its counter to 6000-18000
-    # ticks (5-15 minutes), and PS2_SKIP_RAIN_SNOW already removes the weather
-    # the rain beds accompany. A missing sound is a graceful no-op, so this is
-    # now purely a deployment choice: copy the two folders into the install's
-    # data/resources tree and they play, at the cost of SPU2 space for the rest
-    # of the session.
-    COMMAND ${CMAKE_COMMAND} -E rm -rf "${PS2_APP_DIR}/data/resources/newsound/ambient"
+    # Keep rain/thunder now that PS2 precipitation is enabled. Removing all
+    # of ambient silently removed their sound-pool entries from assets.pak.
+    # Rain's four short samples total ~100 KB and are loaded on demand.
+    # Cave ambience and the much larger legacy loops remain excluded: audsrv's
+    # SPU2 sample cache has no eviction, so those can exhaust its 2 MB budget.
+    COMMAND ${CMAKE_COMMAND} -E rm -rf "${PS2_APP_DIR}/data/resources/newsound/ambient/cave"
     COMMAND ${CMAKE_COMMAND} -E rm -rf "${PS2_APP_DIR}/data/resources/sound/loops"
 
-    # Last, so the two removals above are already reflected in the listing.
+    # Generate the listing after the exclusions above.
     # Ps2ResourceManifest reads this instead of enumerating data/resources at
     # runtime; see the header of ps2_resource_manifest.cmake for why a disc
     # cannot be asked what it contains.
