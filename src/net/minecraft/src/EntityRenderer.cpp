@@ -1,4 +1,7 @@
 #include "EntityRenderer.h"
+#if PLATFORM_PS2
+#include "ps2/minecraft/Ps2WeatherMath.h"
+#endif
 #include "Minecraft.h"
 #include "ItemRenderer.h"
 #include "EntityLiving.h"
@@ -2056,8 +2059,15 @@ void EntityRenderer::renderRainSnow(float partialTicks)
                 const float dz = static_cast<float>(z - 16);
                 const float length = MathHelper::sqrt_float(dx * dx + dz * dz);
                 const int_t index = z << 5 | x;
+#if PLATFORM_PS2
+                // The camera column has dx=dz=0. Never submit NaN vertices to
+                // VU/GS clipping: they can become screen-spanning primitives.
+                rainXCoords[index] = length > 0.0f ? -dz / length : 1.0f;
+                rainYCoords[index] = length > 0.0f ? dx / length : 0.0f;
+#else
                 rainXCoords[index] = -dz / length;
                 rainYCoords[index] = dx / length;
+#endif
             }
         }
         rainCoordsInitialized = true;
@@ -2075,7 +2085,13 @@ void EntityRenderer::renderRainSnow(float partialTicks)
     renderEnable(RenderCapability::Blend);
     renderBlendFunc(RenderBlendFactor::SrcAlpha, RenderBlendFactor::OneMinusSrcAlpha);
     renderAlphaFunc(RenderCompare::Greater, 0.01f);
+#if PLATFORM_PS2
+    // Test against terrain, but do not let translucent curtains occlude one
+    // another as columns change order around the moving camera.
+    renderDepthMask(false);
+#else
     renderBindTexture(mc->renderEngine->getTexture("/environment/snow.png"));
+#endif
 
 #if PLATFORM_FLOAT_VERTEX_MATH
     const float renderPosX = static_cast<float>(entity->lastTickPosX) +
@@ -2096,7 +2112,9 @@ void EntityRenderer::renderRainSnow(float partialTicks)
     const int_t range = Config::isRainFancy() ? 10 : 5;
 #endif
     int_t activeWeatherTexture = -1;
+#if !PLATFORM_PS2
     const float weatherTime = static_cast<float>(rendererUpdateCount) + partialTicks;
+#endif
 
     renderColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 
@@ -2132,7 +2150,14 @@ void EntityRenderer::renderRainSnow(float partialTicks)
                                                        JavaArithmetic::intMul(x, 45238971));
             const int_t zSeed = JavaArithmetic::intAdd(JavaArithmetic::intMul(zSquared, 418711),
                                                        JavaArithmetic::intMul(z, 13761));
+#if PLATFORM_PS2
+            const unsigned int weatherSeed = ps2WeatherHash(static_cast<unsigned int>(xSeed ^ zSeed));
+            const float dx = static_cast<float>(x) + 0.5f - renderPosX;
+            const float dz = static_cast<float>(z) + 0.5f - renderPosZ;
+            const float distanceSquared = (dx * dx + dz * dz) / static_cast<float>(range * range);
+#else
             random.setSeed(static_cast<long_t>(xSeed ^ zSeed));
+#endif
 
             const float temperature = world->getWorldChunkManager()->getTemperatureAtHeight(
                 biome->getFloatTemperature(), precipitationY);
@@ -2148,13 +2173,19 @@ void EntityRenderer::renderRainSnow(float partialTicks)
                     tessellator->startDrawingQuads();
                 }
 
+#if PLATFORM_PS2
+                const float textureOffset = ps2RainOffset(rendererUpdateCount, partialTicks, weatherSeed);
+#else
                 const int_t animationSeed = JavaArithmetic::intAdd(
                     rendererUpdateCount,
                     JavaArithmetic::intAdd(xSeed, zSeed));
                 const float textureOffset =
                     ((static_cast<float>(animationSeed & 31) + partialTicks) / 32.0f) *
                     (3.0f + random.nextFloat());
-#if PLATFORM_FLOAT_VERTEX_MATH
+#endif
+#if PLATFORM_PS2
+                const float opacity = ps2WeatherOpacity(distanceSquared, rainStrength, false);
+#elif PLATFORM_FLOAT_VERTEX_MATH
                 const float dx = static_cast<float>(
                     static_cast<double>(static_cast<float>(x) + 0.5f) - entity->posX);
                 const float dz = static_cast<float>(
@@ -2173,8 +2204,12 @@ void EntityRenderer::renderRainSnow(float partialTicks)
                 const float maxV = static_cast<float>(maxY) / 4.0f + textureOffset;
 
                 tessellator->setBrightness(world->getLightBrightnessForSkyBlocks(x, brightnessY, z, 0));
+#if PLATFORM_PS2
+                tessellator->setColorRGBA_F(1.0f, 1.0f, 1.0f, opacity);
+#else
                 tessellator->setColorRGBA_F(1.0f, 1.0f, 1.0f,
                     ((1.0f - distance * distance) * 0.5f + 0.5f) * rainStrength);
+#endif
                 tessellator->setTranslationD(-renderPosX, -renderPosY, -renderPosZ);
                 tessellator->addVertexWithUV(minX, minY, minZ, 0.0f, minV);
                 tessellator->addVertexWithUV(maxX, minY, maxZ, 1.0f, minV);
@@ -2193,6 +2228,16 @@ void EntityRenderer::renderRainSnow(float partialTicks)
                     tessellator->startDrawingQuads();
                 }
 
+#if PLATFORM_PS2
+                // Bounded periodic motion replaces per-column software-double
+                // Gaussian sampling. Integral wrap distances keep UVs continuous.
+                const float phase = (static_cast<float>(rendererUpdateCount & 2047) + partialTicks) / 2048.0f;
+                const float textureU = static_cast<float>(weatherSeed & 255u) / 256.0f +
+                    phase * static_cast<float>(static_cast<int>((weatherSeed >> 8) & 7u) - 3);
+                const float textureJitter = static_cast<float>((weatherSeed >> 16) & 255u) / 256.0f;
+                const float textureV = phase * 4.0f;
+                const float opacity = ps2WeatherOpacity(distanceSquared, rainStrength, true);
+#else
                 const float textureV = (static_cast<float>(rendererUpdateCount & 511) + partialTicks) / 512.0f;
                 const float textureRandom = random.nextFloat();
                 const float textureGaussian = static_cast<float>(random.nextGaussian());
@@ -2211,6 +2256,7 @@ void EntityRenderer::renderRainSnow(float partialTicks)
                 const double dz = static_cast<double>(static_cast<float>(z) + 0.5f) - entity->posZ;
                 const float distance = MathHelper::sqrt_double(dx * dx + dz * dz) / static_cast<float>(range);
 #endif
+#endif
                 const tess_coord_t minX = static_cast<tess_coord_t>(static_cast<float>(x) - offsetX) + static_cast<tess_coord_t>(0.5);
                 const tess_coord_t maxX = static_cast<tess_coord_t>(static_cast<float>(x) + offsetX) + static_cast<tess_coord_t>(0.5);
                 const tess_coord_t minZ = static_cast<tess_coord_t>(static_cast<float>(z) - offsetZ) + static_cast<tess_coord_t>(0.5);
@@ -2220,8 +2266,12 @@ void EntityRenderer::renderRainSnow(float partialTicks)
                 const int_t packedLight = world->getLightBrightnessForSkyBlocks(x, brightnessY, z, 0);
 
                 tessellator->setBrightness((packedLight * 3 + 15728880) / 4);
+#if PLATFORM_PS2
+                tessellator->setColorRGBA_F(1.0f, 1.0f, 1.0f, opacity);
+#else
                 tessellator->setColorRGBA_F(1.0f, 1.0f, 1.0f,
                     ((1.0f - distance * distance) * 0.3f + 0.5f) * rainStrength);
+#endif
                 tessellator->setTranslationD(-renderPosX, -renderPosY, -renderPosZ);
                 tessellator->addVertexWithUV(minX, minY, minZ, textureU, minV);
                 tessellator->addVertexWithUV(maxX, minY, maxZ, 1.0f + textureU, minV);
@@ -2238,6 +2288,9 @@ void EntityRenderer::renderRainSnow(float partialTicks)
     renderEnable(RenderCapability::CullFace);
     renderDisable(RenderCapability::Blend);
     renderAlphaFunc(RenderCompare::Greater, 0.1f);
+#if PLATFORM_PS2
+    renderDepthMask(true);
+#endif
     disableLightmap(static_cast<double>(partialTicks));
 }
 
