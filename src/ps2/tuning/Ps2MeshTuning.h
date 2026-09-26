@@ -386,12 +386,14 @@
 // between renderer updates, so one dense 512-block step can otherwise overrun
 // the whole frame by itself. Measured 2026-09-25 while walking around the ocean:
 // the build phase averaged 6-10 ms but individual chunk-build samples still
-// reached 22-27 ms, coinciding with the 20-25 FPS oscillation. Check every 32
-// blocks and yield dense steps at roughly 4 ms; cheap steps still consume the
-// full 512-block batch, preserving streaming throughput where the work is cheap.
-// The published mesh remains untouched until the incremental build completes.
+// reached 22-27 ms, coinciding with the 20-25 FPS oscillation. Check the
+// elapsed-time deadline every 8 scanned blocks so expensive special geometry
+// (notably stairs and fences) cannot overshoot by an entire 32-block group
+// before yielding. Cheap steps still consume the full 512-block batch,
+// preserving streaming throughput where the work is cheap. The published mesh
+// remains untouched until the incremental build completes.
 #define PS2_CHUNK_BUILD_STEP_US 4000
-#define PS2_CHUNK_BUILD_TIME_CHECK_BLOCKS 32
+#define PS2_CHUNK_BUILD_TIME_CHECK_BLOCKS 8
 
 // The PS2 renderer grid is 5x3x5 = 75 sections. The old cap of 64 silently
 // dropped the tail of the sorted list, so a section could stay invisible until

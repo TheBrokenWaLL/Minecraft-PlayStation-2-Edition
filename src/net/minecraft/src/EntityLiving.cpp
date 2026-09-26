@@ -814,6 +814,22 @@ void EntityLiving::onUpdate()
 	double d1 = posZ - prevPosZ;
 	float f  = MathHelper::sqrt_double(d * d + d1 * d1);
 #endif
+#if PLATFORM_MULTIPLAYER_REMOTE_LIVING_PHYSICS_TICK_DIVISOR > 1
+	// Remote multiplayer mobs still interpolate their server position every tick,
+	// but throttled ticks return from onLivingUpdate() before moveEntityWithHeading()
+	// can advance the limb animation. Reuse the movement magnitude already computed
+	// here so legs/arms remain visually smooth without restoring any expensive
+	// collision, water, lava, or local-physics work.
+	if (isRemoteMultiplayerLiving(this) && !isRemoteLivingPhysicsTick(this, ticksExisted))
+	{
+		field_705_Q = field_704_R;
+		float limbSpeed = f * 4.0f;
+		if (limbSpeed > 1.0f)
+			limbSpeed = 1.0f;
+		field_704_R += (limbSpeed - field_704_R) * 0.4f;
+		field_703_S += field_704_R;
+	}
+#endif
 	float f1 = renderYawOffset;
 	float f2 = 0.0f;
 	field_9362_u = field_9361_v;
