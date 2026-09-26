@@ -1350,6 +1350,10 @@ bool WorldRenderer::ps2BuildRendererStep(int_t blockBudget)
 #endif
 	isInitialized = true;
 	needsUpdate = dirtyDuringBuild;
+	// The player edit is now visible. Mutations recorded while building still
+	// need a follow-up, but must not inherit the edit's 32 ms urgent lane on
+	// every frame until lighting propagation settles.
+	urgentRebuild = false;
 	int ps2TotalVertices = ps2VertexCount[0] + ps2VertexCount[1];
 #if MC_LOG_LEVEL >= 2
 	platformProfileMeshWork(ps2CommitStart, PlatformMeshWork::Commit);

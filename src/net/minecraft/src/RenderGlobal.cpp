@@ -2541,7 +2541,11 @@ bool RenderGlobal::updateRenderers(EntityLiving *entityliving, bool flag)
 			// batch is microseconds, and the clock still bounds the lane.
 			int_t urgentPacketPolls = 0;
 #endif
-			while (candidate->needsUpdate && urgentSteps < (int_t)PLATFORM_URGENT_MESH_STEP_CAP &&
+			while (candidate->needsUpdate &&
+#if PLATFORM_PS2
+			       candidate->urgentRebuild &&
+#endif
+			       urgentSteps < (int_t)PLATFORM_URGENT_MESH_STEP_CAP &&
 			       urgentSpentUs < (long long)PLATFORM_URGENT_MESH_BUDGET_MS * 1000LL)
 			{
 				++urgentSteps;
@@ -2568,7 +2572,7 @@ bool RenderGlobal::updateRenderers(EntityLiving *entityliving, bool flag)
 				const uint64_t nowUs = PlatformCompat::getMonotonicMicros();
 				MC_LOG_DEBUG("ps2", "urgent mesh: %s after %ld us (steps=%d owner=%d polls=%d lane=%lld us"
 					" activeIn=%d activeOut=%d restarts=%u pending=%d)\n",
-					candidate->needsUpdate ? "yielded" : "published",
+					candidate->urgentRebuild ? "yielded" : "published",
 					(long)(nowUs > candidate->urgentMarkUs ? nowUs - candidate->urgentMarkUs : 0),
 					(int)urgentSteps, (int)urgentOwnerSteps, (int)urgentPacketPolls, urgentSpentUs,
 					urgentBuildActiveAtEntry ? 1 : 0, candidate->isTerrainBuildInProgress() ? 1 : 0,
