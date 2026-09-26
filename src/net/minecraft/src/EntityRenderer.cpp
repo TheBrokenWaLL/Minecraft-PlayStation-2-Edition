@@ -1147,7 +1147,13 @@ void EntityRenderer::updateCameraAndRender(float partialTicks)
     if (settingsWorld != nullptr)
     {
         WorldInfo *worldInfo = settingsWorld->getWorldInfo();
-        if (!Config::isWeatherEnabled() && worldInfo != nullptr)
+        if (!Config::isWeatherEnabled() && worldInfo != nullptr
+#if PLATFORM_PS2
+            // Local weather simulation settings must not clear server rain.
+            // Rain/snow and splash visibility have separate rendering options.
+            && !settingsWorld->multiplayerWorld
+#endif
+        )
             worldInfo->setRaining(false);
 
         // C6 only forces time in local Creative worlds. Multiplayer time remains

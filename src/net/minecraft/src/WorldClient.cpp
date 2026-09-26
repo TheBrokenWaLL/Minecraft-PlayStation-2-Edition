@@ -126,6 +126,12 @@ WorldClient::~WorldClient()
 void WorldClient::tick()
 {
 	setWorldTime(JavaArithmetic::longAdd(getWorldTime(), 1LL));
+#if PLATFORM_PS2
+	// This override does not run World::tick(). Advance the client-only weather
+	// interpolation once per tick, including expiration of lightning flashes.
+	// Do not run the base world's server-side weather timers or simulation.
+	updateWeather();
+#endif
 	int_t light = calculateSkylightSubtracted(1.0f);
 	if (light != skylightSubtracted)
 	{
