@@ -2979,8 +2979,14 @@ void RenderGlobal::markRenderersInRange(int_t i, int_t j, int_t k, int_t l, int_
 				// mesh. markDirty() itself decides whether to coalesce or restart; a
 				// light-only mark always coalesces.
 				enqueueRendererUpdatePriority(worldrenderer);
-				if (worldObj != nullptr && worldObj->isMarkingFromLighting())
+				const bool playerEdit = worldObj != nullptr && worldObj->isMarkingFromPlayerEdit();
+				if (worldObj != nullptr && (worldObj->isMarkingFromLighting() || !playerEdit))
 				{
+					// Lighting and server/world-driven mutations may arrive repeatedly while
+					// a section is already being built (flowing water is the common case).
+					// Coalesce them into one follow-up rebuild instead of throwing away the
+					// partial mesh on every packet/tick. Player edits keep the immediate
+					// restart + urgent lane below.
 					worldrenderer->markDirtyFromLighting();
 				}
 				else
@@ -2992,7 +2998,7 @@ void RenderGlobal::markRenderersInRange(int_t i, int_t j, int_t k, int_t l, int_
 					// the same distance while terrain streams in.
 					if (PLATFORM_URGENT_MESH_DISTANCE_SQ > 0.0f && mc != nullptr &&
 					    mc->renderViewEntity != nullptr &&
-					    worldObj != nullptr && worldObj->isMarkingFromPlayerEdit() &&
+					    playerEdit &&
 					    worldrenderer->distanceToEntitySquared(mc->renderViewEntity) <= PLATFORM_URGENT_MESH_DISTANCE_SQ)
 					{
 #if PLATFORM_PS2 && MC_LOG_LEVEL >= 2
