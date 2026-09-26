@@ -513,7 +513,10 @@
 // and generic tessellator vertex work are reduced for every burning mob.
 #define PS2_ENTITY_FIRE_MAX_LAYERS 3
 #define PS2_ENTITY_FIRE_LAYER_STEP 0.70f
-#define PS2_SKIP_RAIN_SNOW 1
+#define PS2_SKIP_RAIN_SNOW 0
+// Full vanilla fast rain scans an 11x11 column square (fancy: 21x21). The PS2
+// keeps the same rain/snow quads and biome logic but caps the curtain to 9x9.
+#define PS2_RAIN_SNOW_RENDER_RANGE 4
 #define PS2_SKIP_CLOUDS 1
 #define PS2_SKIP_BLOCK_SELECTION_BOX 1
 // The star field is the one piece of sky geometry with a real RAM price. It has
