@@ -575,6 +575,14 @@ bool RenderBlocks::renderBlockPane(Block *block, int_t var2, int_t var3, int_t v
 		paneTextureZ = ConnectedTextures::getGlassPaneTexture(linkZp, linkZn, linkYp, linkYn);
 		paneTextureZReverse = ConnectedTextures::getReverseGlassPaneTexture(paneTextureZ);
 	}
+#if PLATFORM_PS2
+	// The PS2 direct terrain path draws both windings of these coplanar pane
+	// faces. Use the same atlas tile on the reverse winding; its U coordinates
+	// are flipped below so every spatial corner samples the same texel as the
+	// front face instead of overlaying a mirrored copy.
+	paneTextureXReverse = paneTextureX;
+	paneTextureZReverse = paneTextureZ;
+#endif
 
     var68 = (paneTextureX & 15) << 4;
     int_t var15 = paneTextureX & 240;
@@ -590,6 +598,13 @@ bool RenderBlocks::renderBlockPane(Block *block, int_t var2, int_t var3, int_t v
 	tess_coord_t paneXReverse1 = (tess_coord_t)(((float)paneReverseU + 15.99F) / 256.0F);
 	tess_coord_t paneXReverseV0 = (tess_coord_t)((float)paneReverseV / 256.0F);
 	tess_coord_t paneXReverseV1 = (tess_coord_t)(((float)paneReverseV + 15.99F) / 256.0F);
+#if PLATFORM_PS2
+	paneXReverse0 = var20;
+	paneXReverseHalf = var18;
+	paneXReverse1 = var16;
+	paneXReverseV0 = var22;
+	paneXReverseV1 = var24;
+#endif
 
 	int_t paneZU = (paneTextureZ & 15) << 4;
 	int_t paneZV = paneTextureZ & 240;
@@ -606,6 +621,13 @@ bool RenderBlocks::renderBlockPane(Block *block, int_t var2, int_t var3, int_t v
 	tess_coord_t paneZReverse1 = (tess_coord_t)(((float)paneZReverseU + 15.99F) / 256.0F);
 	tess_coord_t paneZReverseV0 = (tess_coord_t)((float)paneZReverseV / 256.0F);
 	tess_coord_t paneZReverseV1 = (tess_coord_t)(((float)paneZReverseV + 15.99F) / 256.0F);
+#if PLATFORM_PS2
+	paneZReverse0 = paneZ1;
+	paneZReverseHalf = paneZHalf;
+	paneZReverse1 = paneZ0;
+	paneZReverseV0 = paneZV0;
+	paneZReverseV1 = paneZV1;
+#endif
     int_t var26 = (var67 & 15) << 4;
     int_t var27 = var67 & 240;
     tess_coord_t var28 = (tess_coord_t)((float)(var26 + 7) / 256.0F);

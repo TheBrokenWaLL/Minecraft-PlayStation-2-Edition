@@ -2244,22 +2244,32 @@ void RenderBlocks::renderCrossedSquares(Block *block, int_t i, tess_coord_t d, t
 	tess_coord_t d8 = x + half + inset;
 	tess_coord_t d9 = (z + half) - inset;
 	tess_coord_t d10 = z + half + inset;
+#if PLATFORM_PS2
+	// PS2 direct terrain does not triangle-cull PS2_FACE_OTHER. Both windings
+	// therefore reach the GS; give the reverse winding the same UV at each
+	// spatial corner so the two coplanar quads cannot fight with mirrored texels.
+	const tess_coord_t reverseLowU = d3;
+	const tess_coord_t reverseHighU = d4;
+#else
+	const tess_coord_t reverseLowU = d4;
+	const tess_coord_t reverseHighU = d3;
+#endif
 	tessellator->addVertexWithUV(d7, y + 1.0f, d9, d3, d5);
 	tessellator->addVertexWithUV(d7, y, d9, d3, d6);
 	tessellator->addVertexWithUV(d8, y, d10, d4, d6);
 	tessellator->addVertexWithUV(d8, y + 1.0f, d10, d4, d5);
-	tessellator->addVertexWithUV(d8, y + 1.0f, d10, d3, d5);
-	tessellator->addVertexWithUV(d8, y, d10, d3, d6);
-	tessellator->addVertexWithUV(d7, y, d9, d4, d6);
-	tessellator->addVertexWithUV(d7, y + 1.0f, d9, d4, d5);
+	tessellator->addVertexWithUV(d8, y + 1.0f, d10, reverseHighU, d5);
+	tessellator->addVertexWithUV(d8, y, d10, reverseHighU, d6);
+	tessellator->addVertexWithUV(d7, y, d9, reverseLowU, d6);
+	tessellator->addVertexWithUV(d7, y + 1.0f, d9, reverseLowU, d5);
 	tessellator->addVertexWithUV(d7, y + 1.0f, d10, d3, d5);
 	tessellator->addVertexWithUV(d7, y, d10, d3, d6);
 	tessellator->addVertexWithUV(d8, y, d9, d4, d6);
 	tessellator->addVertexWithUV(d8, y + 1.0f, d9, d4, d5);
-	tessellator->addVertexWithUV(d8, y + 1.0f, d9, d3, d5);
-	tessellator->addVertexWithUV(d8, y, d9, d3, d6);
-	tessellator->addVertexWithUV(d7, y, d10, d4, d6);
-	tessellator->addVertexWithUV(d7, y + 1.0f, d10, d4, d5);
+	tessellator->addVertexWithUV(d8, y + 1.0f, d9, reverseHighU, d5);
+	tessellator->addVertexWithUV(d8, y, d9, reverseHighU, d6);
+	tessellator->addVertexWithUV(d7, y, d10, reverseLowU, d6);
+	tessellator->addVertexWithUV(d7, y + 1.0f, d10, reverseLowU, d5);
 }
 
 void RenderBlocks::renderCropsCrossed(Block *block, int_t i, tess_coord_t d, tess_coord_t d1, tess_coord_t d2)
@@ -2283,20 +2293,27 @@ void RenderBlocks::renderCropsCrossed(Block *block, int_t i, tess_coord_t d, tes
 	tess_coord_t d8 = x + 0.5f + 0.25f;
 	tess_coord_t d9 = (z + 0.5f) - 0.5f;
 	tess_coord_t d10 = z + 0.5f + 0.5f;
+#if PLATFORM_PS2
+	const tess_coord_t cropReverseLowU = d3;
+	const tess_coord_t cropReverseHighU = d4;
+#else
+	const tess_coord_t cropReverseLowU = d4;
+	const tess_coord_t cropReverseHighU = d3;
+#endif
 	tessellator->addVertexWithUV(d7, y + 1.0f, d9, d3, d5);
 	tessellator->addVertexWithUV(d7, y, d9, d3, d6);
-	tessellator->addVertexWithUV(d7, y, d10, d4, d6);
-	tessellator->addVertexWithUV(d7, y + 1.0f, d10, d4, d5);
+	tessellator->addVertexWithUV(d7, y, d10, cropReverseLowU, d6);
+	tessellator->addVertexWithUV(d7, y + 1.0f, d10, cropReverseLowU, d5);
 	tessellator->addVertexWithUV(d7, y + 1.0f, d10, d3, d5);
 	tessellator->addVertexWithUV(d7, y, d10, d3, d6);
-	tessellator->addVertexWithUV(d7, y, d9, d4, d6);
-	tessellator->addVertexWithUV(d7, y + 1.0f, d9, d4, d5);
-	tessellator->addVertexWithUV(d8, y + 1.0f, d10, d3, d5);
-	tessellator->addVertexWithUV(d8, y, d10, d3, d6);
+	tessellator->addVertexWithUV(d7, y, d9, cropReverseLowU, d6);
+	tessellator->addVertexWithUV(d7, y + 1.0f, d9, cropReverseLowU, d5);
+	tessellator->addVertexWithUV(d8, y + 1.0f, d10, cropReverseHighU, d5);
+	tessellator->addVertexWithUV(d8, y, d10, cropReverseHighU, d6);
 	tessellator->addVertexWithUV(d8, y, d9, d4, d6);
 	tessellator->addVertexWithUV(d8, y + 1.0f, d9, d4, d5);
-	tessellator->addVertexWithUV(d8, y + 1.0f, d9, d3, d5);
-	tessellator->addVertexWithUV(d8, y, d9, d3, d6);
+	tessellator->addVertexWithUV(d8, y + 1.0f, d9, cropReverseHighU, d5);
+	tessellator->addVertexWithUV(d8, y, d9, cropReverseHighU, d6);
 	tessellator->addVertexWithUV(d8, y, d10, d4, d6);
 	tessellator->addVertexWithUV(d8, y + 1.0f, d10, d4, d5);
 	d7 = (x + 0.5f) - 0.5f;
@@ -2307,14 +2324,14 @@ void RenderBlocks::renderCropsCrossed(Block *block, int_t i, tess_coord_t d, tes
 	tessellator->addVertexWithUV(d7, y, d9, d3, d6);
 	tessellator->addVertexWithUV(d8, y, d9, d4, d6);
 	tessellator->addVertexWithUV(d8, y + 1.0f, d9, d4, d5);
-	tessellator->addVertexWithUV(d8, y + 1.0f, d9, d3, d5);
-	tessellator->addVertexWithUV(d8, y, d9, d3, d6);
-	tessellator->addVertexWithUV(d7, y, d9, d4, d6);
-	tessellator->addVertexWithUV(d7, y + 1.0f, d9, d4, d5);
-	tessellator->addVertexWithUV(d8, y + 1.0f, d10, d3, d5);
-	tessellator->addVertexWithUV(d8, y, d10, d3, d6);
-	tessellator->addVertexWithUV(d7, y, d10, d4, d6);
-	tessellator->addVertexWithUV(d7, y + 1.0f, d10, d4, d5);
+	tessellator->addVertexWithUV(d8, y + 1.0f, d9, cropReverseHighU, d5);
+	tessellator->addVertexWithUV(d8, y, d9, cropReverseHighU, d6);
+	tessellator->addVertexWithUV(d7, y, d9, cropReverseLowU, d6);
+	tessellator->addVertexWithUV(d7, y + 1.0f, d9, cropReverseLowU, d5);
+	tessellator->addVertexWithUV(d8, y + 1.0f, d10, cropReverseHighU, d5);
+	tessellator->addVertexWithUV(d8, y, d10, cropReverseHighU, d6);
+	tessellator->addVertexWithUV(d7, y, d10, cropReverseLowU, d6);
+	tessellator->addVertexWithUV(d7, y + 1.0f, d10, cropReverseLowU, d5);
 }
 
 bool RenderBlocks::renderBlockFluids(Block *block, int_t i, int_t j, int_t k)
